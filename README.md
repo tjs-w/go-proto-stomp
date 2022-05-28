@@ -7,6 +7,12 @@ Includes:
 2. `stompd`: STOMP Broker
 3. `stomper`: Interactive CLI for STOMP Client
 
+## `stomp`
+Package import:
+```
+go get -u github.com/tjs-w/go-proto-stomp
+```
+
 ## stomper
 
 ![stomper demo](stomper.gif "stomper")
@@ -61,3 +67,6 @@ header-name         = 1*<any OCTET except CR or LF or ":">
 header-value        = *<any OCTET except CR or LF or ":">
 ```
 ## License
+MIT License
+
+Copyright (c) 2022 Tejas Wanjari
