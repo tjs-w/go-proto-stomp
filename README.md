@@ -1,5 +1,7 @@
 # go-proto-stomp
-
+[![Go Reference](https://pkg.go.dev/badge/github.com/tjs-w/go-proto-stomp/.svg)](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/)
+![go workflow](https://github.com/tjs-w/go-proto-stomp/actions/workflows/go.yml/badge.svg)
+![codeQL workflow](https://github.com/tjs-w/go-proto-stomp/actions/workflows/codeql-analysis.yml/badge.svg)
 ## STOMP Protocol Implementation in Golang (with interactive CLI)
 
 Includes:
@@ -11,6 +13,9 @@ Includes:
 Package import:
 ```shell
 go get -u github.com/tjs-w/go-proto-stomp
+```
+```shell
+import "github.com/tjs-w/go-proto-stomp/pkg/stomp"
 ```
 
 ## stomper
@@ -27,6 +32,7 @@ stompd -p tcp <host> <port>
 ```
 
 ## STOMP Library Documentation
+*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/)*
 
 ## Installation
 
