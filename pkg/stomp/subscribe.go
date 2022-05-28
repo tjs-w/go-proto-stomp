@@ -84,19 +84,27 @@ func publish(frame *Frame, txID string) error {
 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
 	}
 
-	for subsID, info := range destToSubsMap[dest] {
-		go func(subsID string, info *subsInfo) {
-			info.Lock()
-			defer info.Unlock()
+	sendIt := func(subsID string, info *subsInfo) {
+		info.Lock()
+		defer info.Unlock()
 
-			if err := info.sessionHandler.sendMessage(dest, subsID, info.nextAckNum, txID,
-				frame.headers, frame.body); err != nil {
-				fmt.Println(err)
-				return
-			}
-			info.pendingAckBitmap.Add(info.nextAckNum)
-			info.nextAckNum++
-		}(subsID, info)
+		if err := info.sessionHandler.sendMessage(dest, subsID, info.nextAckNum, txID,
+			frame.headers, frame.body); err != nil {
+			fmt.Println(err)
+			return
+		}
+		info.pendingAckBitmap.Add(info.nextAckNum)
+		info.nextAckNum++
+	}
+
+	for subsID, info := range destToSubsMap[dest] {
+		if txID == "" {
+			// Parallelize sending non-tx messages
+			go sendIt(subsID, info)
+		} else {
+			// Send tx messages in same sequence (do not parallelize to maintain order)
+			sendIt(subsID, info)
+		}
 	}
 
 	return nil

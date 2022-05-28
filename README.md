@@ -7,17 +7,24 @@ Includes:
 2. `stompd`: STOMP Broker
 3. `stomper`: Interactive CLI for STOMP Client
 
-## `stomp`
+## stomp
 Package import:
-```
+```shell
 go get -u github.com/tjs-w/go-proto-stomp
 ```
 
 ## stomper
 
+```shell
+stomper -p tcp
+```
+
 ![stomper demo](stomper.gif "stomper")
 
 ## stompd
+```shell
+stompd -p tcp <host> <port>
+```
 
 ## STOMP Library Documentation
 
