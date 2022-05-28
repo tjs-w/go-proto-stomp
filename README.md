@@ -5,18 +5,9 @@
 ## STOMP Protocol Implementation in Golang (with interactive CLI)
 
 Includes:
-1. `stomp`: STOMP Broker/Client Library
+1. `stomper`: Interactive CLI for STOMP Client
 2. `stompd`: STOMP Broker
-3. `stomper`: Interactive CLI for STOMP Client
-
-## stomp
-Package import:
-```shell
-go get -u github.com/tjs-w/go-proto-stomp
-```
-```shell
-import "github.com/tjs-w/go-proto-stomp/pkg/stomp"
-```
+3. `stomp`: STOMP Broker/Client Library
 
 ## stomper
 
@@ -31,10 +22,18 @@ stomper -p tcp
 stompd -p tcp <host> <port>
 ```
 
-## STOMP Library Documentation
-*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/)*
+## stomp
+Package import:
+```shell
+go get -u github.com/tjs-w/go-proto-stomp
+```
+```shell
+import "github.com/tjs-w/go-proto-stomp/pkg/stomp"
+```
 
-## Installation
+## STOMP Library Documentation
+*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp@v0.1.0/pkg/stomp)*
+
 
 ## **[STOMP Protocol Specification](https://stomp.github.io/stomp-specification-1.2.html)**
 The implementation adheres to the spec leaning towards the _version 1.2_ of the protocol.
