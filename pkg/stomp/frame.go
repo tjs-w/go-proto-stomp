@@ -254,14 +254,36 @@ func (f *Frame) customHeadersAllowed() bool {
 	return f.command == CmdMessage || f.command == CmdError || f.command == CmdSend
 }
 
+// checkValidEscapes returns false if it finds any escape sequences other than these: '\\', '\n', '\r', '\c'
+func checkValidEscapes(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			if i+1 == len(s) {
+				return false
+			}
+			if s[i+1] != 'n' && s[i+1] != 'r' && s[i+1] != 'c' && s[i+1] != '\\' {
+				return false
+			}
+			i++
+		}
+	}
+	return true
+}
+
 func (f *Frame) validateHeaders() error {
 	// Are the headers in frame among REQUIRED or OPTIONAL headers for the CMD?
 	// Exception is for MESSAGE, ERROR and SEND frames that can have CUSTOM headers.
 	req := validationMap[f.command].required
 	opt := validationMap[f.command].optional
-	for h := range f.headers {
+	for h, v := range f.headers {
 		if !req.Contains(h) && !opt.Contains(h) && !f.customHeadersAllowed() {
 			return errorMsg(errProtocolFrame, fmt.Sprintf("Invalid header '%s' for command '%s'", h, f.command))
+		}
+
+		// Headers and their values must not contain any escape char other than: '\\', '\n', '\r', '\c'
+		if !checkValidEscapes(string(h)) || !checkValidEscapes(v) {
+			return errorMsg(errProtocolFrame,
+				fmt.Sprintf("Invalid escape sequence in header '%s:%s' for command '%s'", h, v, f.command))
 		}
 	}
 

@@ -287,3 +287,23 @@ passcode:maryjane
 		t.Error(cmp.Diff(actual, expected))
 	}
 }
+
+func TestCheckValidEscapes(t *testing.T) {
+	tests := []struct {
+		str    string
+		result bool
+	}{
+		{`\ngodhksdfs\t`, false},
+		{`godhksdfs\`, false},
+		{`\\\`, false},
+		{`\\\n\r\c`, true},
+	}
+
+	for _, test := range tests {
+		t.Run("str='"+test.str+"'", func(t *testing.T) {
+			if checkValidEscapes(test.str) != test.result {
+				t.Error(test)
+			}
+		})
+	}
+}
