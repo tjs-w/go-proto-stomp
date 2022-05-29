@@ -396,15 +396,23 @@ func handleDisconnect() {
 
 func completion(d prompt.Document) []prompt.Suggest {
 	args := strings.Fields(strings.TrimSpace(d.TextBeforeCursor()))
+	// COMMAND
 	if len(args) == 1 {
 		return prompt.FilterFuzzy(suggestions, d.GetWordBeforeCursorWithSpace(), true)
 	}
+	// SEND
 	if len(args) >= 2 && args[0] == "send" {
 		if args[len(args)-1] == "-" {
 			return []prompt.Suggest{{"-h", "Add custom header"}}
 		}
 		if args[len(args)-1] == "-h" || args[len(args)-2] == "-h" {
 			return prompt.FilterFuzzy(headerSuggestions, d.GetWordBeforeCursorWithSpace(), true)
+		}
+	}
+	// READ
+	if len(args) >= 2 && args[0] == "read" {
+		if args[len(args)-1] == "-" {
+			return []prompt.Suggest{{"-a", "Read ALL messages"}}
 		}
 	}
 	return []prompt.Suggest{}
