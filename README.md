@@ -21,7 +21,7 @@ Includes:
 ## stomper
 
 ```shell
-stomper -p tcp
+stomper -t tcp
 ```
 
 ![stomper demo](stomper.gif "stomper")
@@ -29,7 +29,7 @@ stomper -p tcp
 ## stompd
 Starting the STOMP Server/Broker:
 ```shell
-stompd -p tcp <host> <port>
+stompd -t tcp <host> <port>
 ```
 
 ## stomp

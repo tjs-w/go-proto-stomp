@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -33,6 +34,7 @@ var (
 	errPrint  = color.New(color.FgRed, color.Bold)
 	infoPrint = color.New(color.FgBlue, color.Italic)
 	okPrint   = color.New(color.FgGreen)
+	transport = "tcp"
 )
 
 func errorMsg(s string) {
@@ -380,7 +382,9 @@ func handleConnect(in []string) {
 		errorMsg("Missing host and port")
 		return
 	}
-	tcpConnect(in[1], in[2])
+	if transport == "tcp" {
+		tcpConnect(in[1], in[2])
+	}
 	if err := ctx.client.Connect(false); err != nil {
 		errorMsg(err.Error())
 		return
@@ -419,6 +423,8 @@ func completion(d prompt.Document) []prompt.Suggest {
 }
 
 func main() {
+	transport = *flag.String("t", "tcp", "transport for STOMP protocol (tcp, websocket)")
+	flag.Parse()
 
 	prompt.New(
 		executor,
