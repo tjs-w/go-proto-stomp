@@ -96,7 +96,11 @@ func testClientServer(t *testing.T, listen net.Listener, typ string) {
 	go client(t, typ)
 
 	conn, err := listen.Accept()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err != nil {
 		t.Error(err)
 	}

@@ -37,7 +37,6 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 		return 0, nil, nil
 	}
 	start = start + offset + 1
-	line := string(data[frameStart:start])
 
 	// STOMP headers
 	for {
@@ -48,7 +47,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 		}
 		end = start + offset
 
-		line = string(data[start:end])
+		line := string(data[start:end])
 
 		// Detect end of headers and break
 		if line == "" {

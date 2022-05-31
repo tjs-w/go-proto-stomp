@@ -258,18 +258,18 @@ func (t *Transaction) CommitTransaction() error {
 	return nil
 }
 
-func (c *ClientHandler) ack(id string, txID string) error {
-	m := map[Header]string{HdrKeyID: id}
-	if txID != "" {
-		m[HdrKeyTransaction] = txID
-	}
-	return c.send(CmdAck, m, nil)
-}
-
-func (c *ClientHandler) nack(id string, txID string) error {
-	m := map[Header]string{HdrKeyID: id}
-	if txID != "" {
-		m[HdrKeyTransaction] = txID
-	}
-	return c.send(CmdNack, m, nil)
-}
+// func (c *ClientHandler) ack(id string, txID string) error {
+// 	m := map[Header]string{HdrKeyID: id}
+// 	if txID != "" {
+// 		m[HdrKeyTransaction] = txID
+// 	}
+// 	return c.send(CmdAck, m, nil)
+// }
+//
+// func (c *ClientHandler) nack(id string, txID string) error {
+// 	m := map[Header]string{HdrKeyID: id}
+// 	if txID != "" {
+// 		m[HdrKeyTransaction] = txID
+// 	}
+// 	return c.send(CmdNack, m, nil)
+// }

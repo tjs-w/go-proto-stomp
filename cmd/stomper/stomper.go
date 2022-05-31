@@ -46,82 +46,84 @@ func okMsg(s string) {
 
 }
 
-var suggestions = []prompt.Suggest{
-	// STOMP Commands
-	{"connect", "Connect to a STOMP broker"},
-	{"disconnect", "Disconnect from the STOMP broker"},
-	{"subscribe", "Subscribe to a destination on broker"},
-	{"unsubscribe", "Unsubscribe from a destination on broker"},
-	{"send", "Send a message to a destination on broker"},
-	{"tx_leave", "Leave an ongoing transaction"},
-	{"tx_enter", "Enter an ongoing transaction"},
-	{"tx_begin", "Start a transaction"},
-	{"tx_abort", "Abort the transaction"},
-	{"tx_commit", "Commit the transaction"},
-	{"session", "Show session info"},
-	{"read", "Read received messages"},
-	{"help", "Display commands help"},
-	{"bye", "End session by disconnecting from the STOMP broker"},
-	{"quit", "End session by disconnecting from the STOMP broker"},
-}
+var (
+	suggestions = []prompt.Suggest{
+		// STOMP Commands
+		{Text: "connect", Description: "Connect to a STOMP broker"},
+		{Text: "disconnect", Description: "Disconnect from the STOMP broker"},
+		{Text: "subscribe", Description: "Subscribe to a destination on broker"},
+		{Text: "unsubscribe", Description: "Unsubscribe from a destination on broker"},
+		{Text: "send", Description: "Send a message to a destination on broker"},
+		{Text: "tx_leave", Description: "Leave an ongoing transaction"},
+		{Text: "tx_enter", Description: "Enter an ongoing transaction"},
+		{Text: "tx_begin", Description: "Start a transaction"},
+		{Text: "tx_abort", Description: "Abort the transaction"},
+		{Text: "tx_commit", Description: "Commit the transaction"},
+		{Text: "session", Description: "Show session info"},
+		{Text: "read", Description: "Read received messages"},
+		{Text: "help", Description: "Display commands help"},
+		{Text: "bye", Description: "End session by disconnecting from the STOMP broker"},
+		{Text: "quit", Description: "End session by disconnecting from the STOMP broker"},
+	}
+)
 
 var headerSuggestions = []prompt.Suggest{
 	// HTTP Header
-	{"Accept", "Acceptable response media type"},
-	{"Accept-Charset", "Acceptable response charsets"},
-	{"Accept-Encoding", "Acceptable response content codings"},
-	{"Accept-Language", "Preferred natural languages in response"},
-	{"ALPN", "Application-layer protocol negotiation to use"},
-	{"Alt-Used", "Alternative host in use"},
-	{"Authorization", "Authentication information"},
-	{"Cache-Control", "Directives for caches"},
-	{"Connection", "Connection options"},
-	{"Content-Encoding", "Content codings"},
-	{"Content-Language", "Natural languages for content"},
-	{"Content-Length", "Anticipated size for payload body"},
-	{"Content-Location", "Where content was obtained"},
-	{"Content-MD5", "Base64-encoded MD5 sum of content"},
-	{"Content-Type", "Content media type"},
-	{"Cookie", "Stored cookies"},
-	{"Date", "Datetime when message was originated"},
-	{"Depth", "Applied only to resource or its members"},
-	{"DNT", "Do not track user"},
-	{"Expect", "Expected behaviors supported by server"},
-	{"Forwarded", "Proxies involved"},
-	{"From", "Sender email address"},
-	{"Host", "Target URI"},
-	{"HTTP2-Settings", "HTTP/2 connection parameters"},
-	{"If", "Request condition on state tokens and ETags"},
-	{"If-Match", "Request condition on target resource"},
-	{"If-Modified-Since", "Request condition on modification date"},
-	{"If-None-Match", "Request condition on target resource"},
-	{"If-Range", "Request condition on Range"},
-	{"If-Schedule-Tag-Match", "Request condition on Schedule-Tag"},
-	{"If-Unmodified-Since", "Request condition on modification date"},
-	{"Max-Forwards", "Max number of times forwarded by proxies"},
-	{"MIME-Version", "Version of MIME protocol"},
-	{"Origin", "Origin(s} issuing the request"},
-	{"Pragma", "Implementation-specific directives"},
-	{"Prefer", "Preferred server behaviors"},
-	{"Proxy-Authorization", "Proxy authorization credentials"},
-	{"Proxy-Connection", "Proxy connection options"},
-	{"Range", "Request transfer of only part of data"},
-	{"Referer", "Previous web page"},
-	{"TE", "Transfer codings willing to accept"},
-	{"Transfer-Encoding", "Transfer codings applied to payload body"},
-	{"Upgrade", "Invite server to upgrade to another protocol"},
-	{"User-Agent", "User agent string"},
-	{"Via", "Intermediate proxies"},
-	{"Warning", "Possible incorrectness with payload body"},
-	{"WWW-Authenticate", "Authentication scheme"},
-	{"X-Csrf-Token", "Prevent cross-site request forgery"},
-	{"X-CSRFToken", "Prevent cross-site request forgery"},
-	{"X-Forwarded-For", "Originating client IP address"},
-	{"X-Forwarded-Host", "Original host requested by client"},
-	{"X-Forwarded-Proto", "Originating protocol"},
-	{"X-Http-Method-Override", "Request method override"},
-	{"X-Requested-With", "Used to identify Ajax requests"},
-	{"X-XSRF-TOKEN", "Prevent cross-site request forgery"},
+	{Text: "Accept", Description: "Acceptable response media type"},
+	{Text: "Accept-Charset", Description: "Acceptable response charsets"},
+	{Text: "Accept-Encoding", Description: "Acceptable response content codings"},
+	{Text: "Accept-Language", Description: "Preferred natural languages in response"},
+	{Text: "ALPN", Description: "Application-layer protocol negotiation to use"},
+	{Text: "Alt-Used", Description: "Alternative host in use"},
+	{Text: "Authorization", Description: "Authentication information"},
+	{Text: "Cache-Control", Description: "Directives for caches"},
+	{Text: "Connection", Description: "Connection options"},
+	{Text: "Content-Encoding", Description: "Content codings"},
+	{Text: "Content-Language", Description: "Natural languages for content"},
+	{Text: "Content-Length", Description: "Anticipated size for payload body"},
+	{Text: "Content-Location", Description: "Where content was obtained"},
+	{Text: "Content-MD5", Description: "Base64-encoded MD5 sum of content"},
+	{Text: "Content-Type", Description: "Content media type"},
+	{Text: "Cookie", Description: "Stored cookies"},
+	{Text: "Date", Description: "Datetime when message was originated"},
+	{Text: "Depth", Description: "Applied only to resource or its members"},
+	{Text: "DNT", Description: "Do not track user"},
+	{Text: "Expect", Description: "Expected behaviors supported by server"},
+	{Text: "Forwarded", Description: "Proxies involved"},
+	{Text: "From", Description: "Sender email address"},
+	{Text: "Host", Description: "Target URI"},
+	{Text: "HTTP2-Settings", Description: "HTTP/2 connection parameters"},
+	{Text: "If", Description: "Request condition on state tokens and ETags"},
+	{Text: "If-Match", Description: "Request condition on target resource"},
+	{Text: "If-Modified-Since", Description: "Request condition on modification date"},
+	{Text: "If-None-Match", Description: "Request condition on target resource"},
+	{Text: "If-Range", Description: "Request condition on Range"},
+	{Text: "If-Schedule-Tag-Match", Description: "Request condition on Schedule-Tag"},
+	{Text: "If-Unmodified-Since", Description: "Request condition on modification date"},
+	{Text: "Max-Forwards", Description: "Max number of times forwarded by proxies"},
+	{Text: "MIME-Version", Description: "Version of MIME protocol"},
+	{Text: "Origin", Description: "Origin(s} issuing the request"},
+	{Text: "Pragma", Description: "Implementation-specific directives"},
+	{Text: "Prefer", Description: "Preferred server behaviors"},
+	{Text: "Proxy-Authorization", Description: "Proxy authorization credentials"},
+	{Text: "Proxy-Connection", Description: "Proxy connection options"},
+	{Text: "Range", Description: "Request transfer of only part of data"},
+	{Text: "Referer", Description: "Previous web page"},
+	{Text: "TE", Description: "Transfer codings willing to accept"},
+	{Text: "Transfer-Encoding", Description: "Transfer codings applied to payload body"},
+	{Text: "Upgrade", Description: "Invite server to upgrade to another protocol"},
+	{Text: "User-Agent", Description: "User agent string"},
+	{Text: "Via", Description: "Intermediate proxies"},
+	{Text: "Warning", Description: "Possible incorrectness with payload body"},
+	{Text: "WWW-Authenticate", Description: "Authentication scheme"},
+	{Text: "X-Csrf-Token", Description: "Prevent cross-site request forgery"},
+	{Text: "X-CSRFToken", Description: "Prevent cross-site request forgery"},
+	{Text: "X-Forwarded-For", Description: "Originating client IP address"},
+	{Text: "X-Forwarded-Host", Description: "Original host requested by client"},
+	{Text: "X-Forwarded-Proto", Description: "Originating protocol"},
+	{Text: "X-Http-Method-Override", Description: "Request method override"},
+	{Text: "X-Requested-With", Description: "Used to identify Ajax requests"},
+	{Text: "X-XSRF-TOKEN", Description: "Prevent cross-site request forgery"},
 }
 
 func tcpConnect(host string, port string) {
@@ -407,7 +409,7 @@ func completion(d prompt.Document) []prompt.Suggest {
 	// SEND
 	if len(args) >= 2 && args[0] == "send" {
 		if args[len(args)-1] == "-" {
-			return []prompt.Suggest{{"-h", "Add custom header"}}
+			return []prompt.Suggest{{Text: "-h", Description: "Add custom header"}}
 		}
 		if args[len(args)-1] == "-h" || args[len(args)-2] == "-h" {
 			return prompt.FilterFuzzy(headerSuggestions, d.GetWordBeforeCursorWithSpace(), true)
@@ -416,7 +418,7 @@ func completion(d prompt.Document) []prompt.Suggest {
 	// READ
 	if len(args) >= 2 && args[0] == "read" {
 		if args[len(args)-1] == "-" {
-			return []prompt.Suggest{{"-a", "Read ALL messages"}}
+			return []prompt.Suggest{{Text: "-a", Description: "Read ALL messages"}}
 		}
 	}
 	return []prompt.Suggest{}
