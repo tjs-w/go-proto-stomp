@@ -17,3 +17,5 @@
 # Others
 *.DS_Store
 .idea/
+
+dist/

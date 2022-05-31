@@ -1,0 +1,101 @@
+name: goreleaser
+
+on:
+  push:
+    # run only against tags
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+  # packages: write
+  # issues: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --force --tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+
+      - name: Build stompd
+        # You may pin to the exact commit or the version.
+        # uses: goreleaser/goreleaser-action@68acf3b1adf004ac9c2f0a4259e85c5f66e99bef
+        uses: goreleaser/goreleaser-action@v3.0.0
+        with:
+          # GoReleaser Distribution (goreleaser or goreleaser-pro)
+          ## distribution: # optional, default is goreleaser
+          # GoReleaser version
+          ## version: # optional, default is latest
+          # Arguments to pass to GoReleaser
+          args: build --rm-dist --config .goreleaser.yaml
+          # Working directory (below repository root)
+          workdir: cmd/stompd/
+          # Just install GoReleaser
+          ## install-only: # optional, default is false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build stomper
+        # You may pin to the exact commit or the version.
+        # uses: goreleaser/goreleaser-action@68acf3b1adf004ac9c2f0a4259e85c5f66e99bef
+        uses: goreleaser/goreleaser-action@v3.0.0
+        with:
+          # GoReleaser Distribution (goreleaser or goreleaser-pro)
+          ## distribution: # optional, default is goreleaser
+          # GoReleaser version
+          ## version: # optional, default is latest
+          # Arguments to pass to GoReleaser
+          args: build --rm-dist --config .goreleaser.yaml
+          # Working directory (below repository root)
+          workdir: cmd/stomper/
+          # Just install GoReleaser
+          ## install-only: # optional, default is false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release stompd
+        # You may pin to the exact commit or the version.
+        # uses: goreleaser/goreleaser-action@68acf3b1adf004ac9c2f0a4259e85c5f66e99bef
+        uses: goreleaser/goreleaser-action@v3.0.0
+        with:
+          # GoReleaser Distribution (goreleaser or goreleaser-pro)
+          ## distribution: # optional, default is goreleaser
+          # GoReleaser version
+          ## version: # optional, default is latest
+          # Arguments to pass to GoReleaser
+          args: release --rm-dist --config .goreleaser.yaml
+          # Working directory (below repository root)
+          workdir: cmd/stompd/
+          # Just install GoReleaser
+          ## install-only: # optional, default is false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release stomper
+        # You may pin to the exact commit or the version.
+        # uses: goreleaser/goreleaser-action@68acf3b1adf004ac9c2f0a4259e85c5f66e99bef
+        uses: goreleaser/goreleaser-action@v3.0.0
+        with:
+          # GoReleaser Distribution (goreleaser or goreleaser-pro)
+          ## distribution: # optional, default is goreleaser
+          # GoReleaser version
+          ## version: # optional, default is latest
+          # Arguments to pass to GoReleaser
+          args: release --rm-dist --config .goreleaser.yaml
+          # Working directory (below repository root)
+          workdir: cmd/stomper/
+          # Just install GoReleaser
+          ## install-only: # optional, default is false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
