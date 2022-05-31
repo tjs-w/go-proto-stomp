@@ -10,6 +10,8 @@
 
 **STOMP** stands for *Simple Text Oriented Messaging Protocol*
 
+**[Latest Release](https://github.com/tjs-w/go-proto-stomp/releases/latest)**
+
 ## STOMP Protocol Implementation in Golang (with interactive CLI)
 [![Go Reference](https://pkg.go.dev/badge/github.com/tjs-w/go-proto-stomp/.svg)](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/)
 
