@@ -2,6 +2,7 @@ package stomp
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +43,9 @@ func addSubscription(dest string, subsID string, ackMode AckMode, sess *SessionH
 		sessionHandler: sess,
 		ackMode:        ackMode,
 	}
+
+	subsToDestMap[subsID] = dest
+
 	if _, ok := sessToSubsMap[sess.sessionID]; !ok {
 		sessToSubsMap[sess.sessionID] = set.NewSet()
 	}
@@ -54,11 +58,12 @@ func removeSubscription(subsID string) error {
 		return errorMsg(errBrokerStateMachine, "No such subscription present to unsubscribe, subsID: "+subsID)
 	}
 	dest := subsToDestMap[subsID]
+
 	if _, ok := destToSubsMap[dest]; !ok {
 		return errorMsg(errBrokerStateMachine, "No such subscription for given destination, subsID: "+subsID)
 	}
-
 	sess := destToSubsMap[dest][subsID].sessionHandler.sessionID
+
 	sessToSubsMap[sess].Remove(subsID)
 	delete(destToSubsMap[dest], subsID)
 	delete(subsToDestMap, subsID)
@@ -90,7 +95,7 @@ func publish(frame *Frame, txID string) error {
 
 		if err := info.sessionHandler.sendMessage(dest, subsID, info.nextAckNum, txID,
 			frame.headers, frame.body); err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 		info.pendingAckBitmap.Add(info.nextAckNum)

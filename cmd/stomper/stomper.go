@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -431,11 +430,8 @@ func completion(d prompt.Document) []prompt.Suggest {
 }
 
 func main() {
-	log.Println(">>>>", flag.Args())
 	transport = *flag.String("t", "websocket", "transport for STOMP protocol (tcp, websocket)")
 	flag.Parse()
-
-	log.Println(">>>", transport)
 
 	prompt.New(
 		executor,

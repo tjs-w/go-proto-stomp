@@ -357,7 +357,7 @@ func (f Frame) String() string {
 		sb.WriteString(escape(k) + ":" + escape(f.headers[Header(k)]) + "\n")
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprint(f.body) + "<NUL>")
+	sb.WriteString(fmt.Sprint(string(f.body)) + "<NUL>")
 
 	sb.WriteString("\n===\n")
 	return sb.String()

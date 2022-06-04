@@ -3,6 +3,7 @@ package stomp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -11,21 +12,21 @@ import (
 	"github.com/google/uuid"
 )
 
-var wgSessions sync.WaitGroup
-
 // SessionHandler handles the STOMP client session on connection
 type SessionHandler struct {
-	conn      net.Conn
-	sessionID string
-	loginFunc LoginFunc
+	conn       net.Conn
+	sessionID  string
+	loginFunc  LoginFunc
+	wgSessions *sync.WaitGroup
 }
 
 // NewSessionHandler creates a new session object & maintains the session state internally
-func NewSessionHandler(conn net.Conn, loginFunc LoginFunc) *SessionHandler {
+func NewSessionHandler(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup) *SessionHandler {
 	return &SessionHandler{
-		conn:      conn,
-		loginFunc: loginFunc,
-		sessionID: uuid.NewString(),
+		conn:       conn,
+		loginFunc:  loginFunc,
+		sessionID:  uuid.NewString(),
+		wgSessions: wg,
 	}
 }
 
@@ -35,7 +36,7 @@ type LoginFunc func(login, passcode string) error
 // Start begins the STOMP session with the Client
 func (sh *SessionHandler) Start() {
 	defer sh.cleanup()
-	wgSessions.Add(1)
+	sh.wgSessions.Add(1)
 	for raw := range FrameScanner(sh.conn) {
 		frame, err := NewFrameFromBytes(raw)
 		if err != nil {
@@ -48,6 +49,7 @@ func (sh *SessionHandler) Start() {
 		}
 
 		if err = sh.stateMachine(frame); err != nil {
+			log.Println(err)
 			return
 		}
 	}
@@ -55,7 +57,7 @@ func (sh *SessionHandler) Start() {
 
 func (sh *SessionHandler) cleanup() {
 	sh.conn.Close()
-	wgSessions.Done()
+	sh.wgSessions.Done()
 }
 
 // sendError is the helper function to send the ERROR frames
@@ -98,7 +100,7 @@ func (sh *SessionHandler) stateMachine(frame *Frame) error {
 		}
 
 	case CmdUnsubscribe:
-		if err := removeSubscription(frame.headers[HdrKeySubscription]); err != nil {
+		if err := removeSubscription(frame.headers[HdrKeyID]); err != nil {
 			return err
 		}
 
@@ -183,19 +185,11 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 			ver = "1.2"
 			break
 		}
-		if v == "1.1" {
-			ver = "1.1"
-			break
-		}
-		if v == "1.0" {
-			ver = "1.0"
-			break
-		}
 	}
 	if ver == "" {
 		// Send version ERROR
 		err := sh.sendError(errors.New("version mismatch"),
-			"Server supported versions: 1.2, 1.1, 1.0. Received:"+f.String())
+			"Server supported versions: 1.2. Received:"+f.String())
 		return errorMsg(errBrokerStateMachine, "Invalid client version received: "+f.String()+"::"+err.Error())
 	}
 
@@ -203,8 +197,8 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 	if sh.loginFunc != nil {
 		login, passcode := f.getHeader(HdrKeyLogin), f.getHeader(HdrKeyPassCode)
 		if err := sh.loginFunc(login, passcode); err != nil {
-			e := sh.sendError(errors.New("login failed"), "Authentication failed:\n"+err.Error())
-			return errorMsg(errBrokerStateMachine, "Login error: "+err.Error()+"::"+e.Error())
+			_ = sh.sendError(errors.New("login failed"), "Authentication failed:\n"+err.Error())
+			return errorMsg(errBrokerStateMachine, "Login error: "+err.Error())
 		}
 	}
 
@@ -223,19 +217,30 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 	return nil
 }
 
+type Broker interface {
+	ListenAndServe()
+	Shutdown()
+}
+
 // StartBroker is the entry point for the STOMP broker.
 // It accepts `transport` which could be either TCP or Websocket; the host and the port the server must start on; and
 // a loginFunc [func(login, passcode string) error] which is a user defined function for authenticating the user.
-func StartBroker(transport Transport, host, port string, loginFunc LoginFunc) error {
+func StartBroker(transport Transport, host, port string, loginFunc LoginFunc) (Broker, error) {
+	var broker Broker
+	var err error
 	switch transport {
 	case TransportTCP:
-		if err := startTcpBroker(host, port, loginFunc); err != nil {
-			return err
+		var tcp *tcpBroker
+		if tcp, err = startTcpBroker(host, port, loginFunc); err != nil {
+			return nil, err
 		}
+		broker = tcp
 	case TransportWebsocket:
-		if err := startWebsocketBroker(host, port, loginFunc); err != nil {
-			return err
+		var wss *wssBroker
+		if wss, err = startWebsocketBroker(host, port, loginFunc); err != nil {
+			return nil, err
 		}
+		broker = wss
 	}
-	return nil
+	return broker, nil
 }

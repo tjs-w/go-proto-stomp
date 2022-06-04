@@ -279,7 +279,7 @@ host:stomp.example.com
 login:peter@parker.com
 passcode:maryjane
 
-[]<NUL>
+<NUL>
 ===
 `
 	actual := fmt.Sprint(deserializedFrames[0].frame)

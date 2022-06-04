@@ -32,8 +32,9 @@ type UserMessage struct {
 
 // Subscription represents the state of subscription
 type Subscription struct {
-	c      *ClientHandler
-	SubsID string
+	c           *ClientHandler
+	SubsID      string
+	Destination string
 }
 
 // Transaction represents the state of transaction
@@ -75,11 +76,13 @@ func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) 
 		conn, err = startTcpClient(host, port)
 	case TransportWebsocket:
 		conn, err = startWebsocketClient(host, port)
-	default:
-		log.Fatalln("Invalid transport:", transport)
 	}
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if opts == nil {
+		opts = &ClientOpts{}
 	}
 
 	if opts.Host == "" {
@@ -233,7 +236,7 @@ func (c *ClientHandler) Subscribe(dest string, mode AckMode) (*Subscription, err
 	if err := c.send(CmdSubscribe, h, nil); err != nil {
 		return nil, err
 	}
-	return &Subscription{c: c, SubsID: subID}, nil
+	return &Subscription{c: c, SubsID: subID, Destination: dest}, nil
 }
 
 func (s *Subscription) Unsubscribe() error {

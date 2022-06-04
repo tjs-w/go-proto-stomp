@@ -20,6 +20,10 @@ Includes:
 2. `stompd`: STOMP Broker
 3. `stomp`: STOMP Broker/Client Library
 
+### Supported Transports
+1. TCP
+2. Websocket
+
 ## stomper
 
 ```shell
@@ -45,7 +49,7 @@ import "github.com/tjs-w/go-proto-stomp/pkg/stomp"
 ```
 
 ## STOMP Library Documentation
-*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp@v0.1.0/pkg/stomp)* lists the APIs for integrating both the 
+*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp@v0.1.0/pkg/stomp)* lists the APIs for integrating both the
 STOMP Broker and Client.
 ## **[STOMP Protocol Specification](https://stomp.github.io/stomp-specification-1.2.html)**
 The implementation adheres to the spec leaning towards the _version 1.2_ of the protocol.
@@ -55,7 +59,7 @@ This implementation strictly follows the below grammar for frame construction an
 NULL                = <US-ASCII null (octet 0)>
 LF                  = <US-ASCII line feed (aka newline) (octet 10)>
 CR                  = <US-ASCII carriage return (octet 13)>
-EOL                 = [CR] LF 
+EOL                 = [CR] LF
 OCTET               = <any 8-bit sequence of data>
 
 frame-stream        = 1*frame

@@ -24,9 +24,11 @@ func main() {
 		t = stomp.TransportWebsocket
 	}
 
-	if err := stomp.StartBroker(t, host, port, nil); err != nil {
+	var err error
+	var broker stomp.Broker
+	if broker, err = stomp.StartBroker(t, host, port, nil); err != nil {
 		log.Fatalln(err)
 	}
-
+	broker.ListenAndServe()
 	flag.Usage()
 }

@@ -7,13 +7,20 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"nhooyr.io/websocket"
 )
 
+type wssBroker struct {
+	httpServer *http.Server
+	wgSessions *sync.WaitGroup
+}
+
 // startWebsocketBroker is starts the STOMP broker on Websocket server
-func startWebsocketBroker(host, port string, loginFunc LoginFunc) error {
+func startWebsocketBroker(host, port string, loginFunc LoginFunc) (*wssBroker, error) {
+	wss := &wssBroker{}
 	broker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for {
 			c, err := websocket.Accept(w, r,
@@ -27,30 +34,41 @@ func startWebsocketBroker(host, port string, loginFunc LoginFunc) error {
 			log.Println(r.Context())
 
 			conn := websocket.NetConn(context.Background(), c, websocket.MessageText)
-			go NewSessionHandler(conn, loginFunc).Start()
+			wss.wgSessions = &sync.WaitGroup{}
+			go NewSessionHandler(conn, loginFunc, wss.wgSessions).Start()
 		}
 	})
 
-	httpServer := &http.Server{
+	wss.httpServer = &http.Server{
 		Addr:    host + ":" + port,
 		Handler: broker,
 	}
+	wss.wgSessions = &sync.WaitGroup{}
 
 	// Handle sigterm and await termChan signal
-	termChan := make(chan os.Signal)
+	termChan := make(chan os.Signal, 2)
 	signal.Notify(termChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-termChan // Blocks here until interrupted
-		log.Println("Shutdown initiated ...")
-		_ = httpServer.Shutdown(context.Background())
-		wgSessions.Wait()
+		wss.Shutdown()
 	}()
 
-	if err := httpServer.ListenAndServe(); err != nil {
-		return err
-	}
+	return wss, nil
+}
 
-	return nil
+func (wss *wssBroker) ListenAndServe() {
+	if err := wss.httpServer.ListenAndServe(); err != nil {
+		log.Println(err)
+		return
+	}
+}
+
+func (wss *wssBroker) Shutdown() {
+	log.Println("Shutdown initiated ...")
+	wss.wgSessions.Wait()
+	if err := wss.httpServer.Shutdown(context.Background()); err != nil {
+		log.Println(err)
+	}
 }
 
 func startWebsocketClient(host, port string) (net.Conn, error) {
