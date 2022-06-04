@@ -2,13 +2,13 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 
 	"github.com/tjs-w/go-proto-stomp/pkg/stomp"
 )
 
 func main() {
-	transport := flag.String("t", "tcp", "transport for STOMP (tcp, websocket)")
+	transport := flag.String("t", "websocket", "transport for STOMP (tcp, websocket)")
 	flag.Parse()
 	host := "localhost"
 	port := stomp.DefaultPort
@@ -18,10 +18,15 @@ func main() {
 	if "" != flag.Arg(1) {
 		port = flag.Arg(1)
 	}
-	if *transport == "tcp" {
-		if err := stomp.StartTcpBroker(host, port); err != nil {
-			fmt.Println(err.Error())
-		}
+
+	t := stomp.TransportTCP
+	if *transport == "websocket" {
+		t = stomp.TransportWebsocket
 	}
+
+	if err := stomp.StartBroker(t, host, port, nil); err != nil {
+		log.Fatalln(err)
+	}
+
 	flag.Usage()
 }

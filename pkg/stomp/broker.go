@@ -6,9 +6,12 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
+
+var wgSessions sync.WaitGroup
 
 // SessionHandler handles the STOMP client session on connection
 type SessionHandler struct {
@@ -31,7 +34,8 @@ type LoginFunc func(login, passcode string) error
 
 // Start begins the STOMP session with the Client
 func (sh *SessionHandler) Start() {
-	defer sh.conn.Close()
+	defer sh.cleanup()
+	wgSessions.Add(1)
 	for raw := range FrameScanner(sh.conn) {
 		frame, err := NewFrameFromBytes(raw)
 		if err != nil {
@@ -47,6 +51,11 @@ func (sh *SessionHandler) Start() {
 			return
 		}
 	}
+}
+
+func (sh *SessionHandler) cleanup() {
+	sh.conn.Close()
+	wgSessions.Done()
 }
 
 // sendError is the helper function to send the ERROR frames
@@ -211,5 +220,22 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 		return err
 	}
 
+	return nil
+}
+
+// StartBroker is the entry point for the STOMP broker.
+// It accepts `transport` which could be either TCP or Websocket; the host and the port the server must start on; and
+// a loginFunc [func(login, passcode string) error] which is a user defined function for authenticating the user.
+func StartBroker(transport Transport, host, port string, loginFunc LoginFunc) error {
+	switch transport {
+	case TransportTCP:
+		if err := startTcpBroker(host, port, loginFunc); err != nil {
+			return err
+		}
+	case TransportWebsocket:
+		if err := startWebsocketBroker(host, port, loginFunc); err != nil {
+			return err
+		}
+	}
 	return nil
 }

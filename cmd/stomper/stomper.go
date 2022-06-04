@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -126,26 +127,29 @@ var headerSuggestions = []prompt.Suggest{
 	{Text: "X-XSRF-TOKEN", Description: "Prevent cross-site request forgery"},
 }
 
-func tcpConnect(host string, port string) {
-	var err error
-
+func setupConnection(host string, port string, t stomp.Transport) {
 	keyPrint := color.New(color.FgRed, color.Bold, color.Italic).SprintFunc()
 	valPrint := color.New(color.FgYellow).SprintFunc()
 	bodyPrint := func(b []byte) []byte {
 		return []byte(color.New(color.FgBlue).Sprint(string(b)))
 	}
 
-	ctx.client, err = stomp.StartTcpClient(host, port, func(message *stomp.UserMessage) {
+	msgHandler := func(message *stomp.UserMessage) {
 		sb := strings.Builder{}
 		for k, v := range message.Headers {
 			sb.WriteString(fmt.Sprintf("%s:%s\n", keyPrint(k), valPrint(v)))
 		}
 		sb.Write(bodyPrint(message.Body))
 		ctx.messages = append(ctx.messages, sb.String())
-	})
-	if err != nil {
-		fmt.Println(err)
 	}
+
+	ctx.client = stomp.NewClientHandler(t, host, port, &stomp.ClientOpts{
+		Host:           host,
+		Login:          "",
+		Passcode:       "",
+		HeartBeat:      [2]int{},
+		MessageHandler: msgHandler,
+	})
 }
 
 func livePrefix() (string, bool) {
@@ -384,9 +388,11 @@ func handleConnect(in []string) {
 		errorMsg("Missing host and port")
 		return
 	}
-	if transport == "tcp" {
-		tcpConnect(in[1], in[2])
+	t := stomp.TransportTCP
+	if transport == "websocket" {
+		t = stomp.TransportWebsocket
 	}
+	setupConnection(in[1], in[2], t)
 	if err := ctx.client.Connect(false); err != nil {
 		errorMsg(err.Error())
 		return
@@ -425,8 +431,11 @@ func completion(d prompt.Document) []prompt.Suggest {
 }
 
 func main() {
-	transport = *flag.String("t", "tcp", "transport for STOMP protocol (tcp, websocket)")
+	log.Println(">>>>", flag.Args())
+	transport = *flag.String("t", "websocket", "transport for STOMP protocol (tcp, websocket)")
 	flag.Parse()
+
+	log.Println(">>>", transport)
 
 	prompt.New(
 		executor,

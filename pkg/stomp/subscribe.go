@@ -19,7 +19,7 @@ type subsInfo struct {
 	pendingAckBitmap roaring.Bitmap
 }
 
-// subsToInfo: SubscriptionID => ListOf(Session, AckMode[auto/client/client-individual])
+// subsToInfo: SubscriptionID => (Session, AckMode[auto/client/client-individual], etc...)
 type subsToInfo map[string]*subsInfo
 
 var (
@@ -84,7 +84,7 @@ func publish(frame *Frame, txID string) error {
 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
 	}
 
-	sendIt := func(subsID string, info *subsInfo) {
+	sendIt := func(subsID string, info *subsInfo, wg *sync.WaitGroup) {
 		info.Lock()
 		defer info.Unlock()
 
@@ -95,17 +95,22 @@ func publish(frame *Frame, txID string) error {
 		}
 		info.pendingAckBitmap.Add(info.nextAckNum)
 		info.nextAckNum++
+
+		wg.Done()
 	}
 
+	var wg sync.WaitGroup
 	for subsID, info := range destToSubsMap[dest] {
+		wg.Add(1)
 		if txID == "" {
 			// Parallelize sending non-tx messages
-			go sendIt(subsID, info)
+			go sendIt(subsID, info, &wg)
 		} else {
 			// Send tx messages in same sequence (do not parallelize to maintain order)
-			sendIt(subsID, info)
+			sendIt(subsID, info, &wg)
 		}
 	}
+	wg.Wait()
 
 	return nil
 }

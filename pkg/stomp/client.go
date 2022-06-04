@@ -3,6 +3,7 @@ package stomp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -13,6 +14,14 @@ import (
 const (
 	// DisconnectID is used as a `receipt` header value in the DISCONNECT message from client
 	DisconnectID = "BYE-BYE!"
+)
+
+// Transport represents the underlying transporting protocol for STOMP
+type Transport string
+
+var (
+	TransportTCP       Transport = "TCP"       // STOMP over TCP
+	TransportWebsocket Transport = "Websocket" // STOMP over Websocket
 )
 
 // UserMessage represents the messages and the user-headers to be received by the user
@@ -42,7 +51,7 @@ type ClientHandler struct {
 	conn       net.Conn           // Connection to the server/broker
 	host       string             // Virtual-host on the STOMP broker
 	login      string             // Username for the login to STOMP broker
-	passcode   string             // Password to login to the STOMP broker
+	passcode   string             // Password to log in to the STOMP broker
 	hearBeat   [2]int             // Values in milliseconds, 0 - Send timeout, 1 - Receive timeout
 	msgHandler MessageHandlerFunc // Callback to process the MESSAGE
 }
@@ -53,11 +62,26 @@ type ClientOpts struct {
 	Login          string             // AuthN Username
 	Passcode       string             // AuthN Password
 	HeartBeat      [2]int             // HeartBeats config [2]int{ outgoing-freq, incoming-freq }
-	MessageHandler MessageHandlerFunc // User-defined callback function to handle MESSAGEs
+	MessageHandler MessageHandlerFunc // User-defined callback function to handle MESSAGE
 }
 
 // NewClientHandler creates the Client for STOMP
-func NewClientHandler(conn net.Conn, opts *ClientOpts) *ClientHandler {
+func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) *ClientHandler {
+	var conn net.Conn
+	var err error
+
+	switch transport {
+	case TransportTCP:
+		conn, err = startTcpClient(host, port)
+	case TransportWebsocket:
+		conn, err = startWebsocketClient(host, port)
+	default:
+		log.Fatalln("Invalid transport:", transport)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if opts.Host == "" {
 		opts.Host = conn.RemoteAddr().String()
 	}
