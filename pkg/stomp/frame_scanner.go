@@ -3,17 +3,13 @@ package stomp
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 )
 
 func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx error) {
-	// if bytes.IndexByte(data, nullOctet) == -1 {
-	// 	return 0, nil, nil
-	// }
-
 	if len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -33,8 +29,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 	// STOMP command
 	offset := bytes.IndexByte(data[start:], lineFeed)
 	if offset == -1 {
-		// fmt.Println(errorMsg(errFrameScanner, "Too long, cannot find '\n'"))
-		return 0, nil, nil
+		return 0, nil, errorMsg(errFrameScanner, "Too long, cannot find '\n'")
 	}
 	start = start + offset + 1
 
@@ -42,8 +37,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 	for {
 		offset = bytes.IndexByte(data[start:], lineFeed)
 		if offset == -1 {
-			// fmt.Println(errorMsg(errFrameScanner, "Too long, cannot find '\n'"))
-			return 0, nil, nil
+			return 0, nil, errorMsg(errFrameScanner, "Too long, cannot find '\n'")
 		}
 		end = start + offset
 
@@ -61,8 +55,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 		// Parse the Header line
 		hdr := strings.Split(line, ":")
 		if len(hdr) == 1 { // Missing ":"
-			// fmt.Println(errorMsg(errFrameScanner, "Expected ':' missing in header"))
-			return 0, nil, nil
+			return 0, nil, errorMsg(errFrameScanner, "Expected ':' missing in header")
 		}
 
 		// Check for `content-length`
@@ -70,7 +63,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 			var err error
 			bodyLen, err = strconv.Atoi(hdr[1])
 			if err != nil {
-				fmt.Println(errorMsg(errFrameScanner, "Invalid header: "+line+": "+err.Error()))
+				return 0, nil, errorMsg(errFrameScanner, "Invalid header: "+line+": "+err.Error())
 			}
 		}
 
@@ -90,7 +83,7 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 			return 0, nil, nil
 		}
 		if data[end] != nullOctet {
-			fmt.Println(errorMsg(errFrameScanner, "Invalid content-length, frame does end with NUL"))
+			return 0, nil, errorMsg(errFrameScanner, "Invalid content-length, frame does end with NUL")
 		}
 		end++
 	}
@@ -115,7 +108,7 @@ func FrameScanner(conn io.Reader) <-chan []byte {
 			ch <- scanner.Bytes()
 		}
 		if err := scanner.Err(); err != nil {
-			fmt.Println(errFrameScanner, ":::", err)
+			log.Println(errFrameScanner, "FrameScanner finished:", err)
 		}
 		close(ch)
 	}()

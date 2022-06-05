@@ -167,15 +167,12 @@ func TestMain(m *testing.M) {
 		return errors.New("authentication failed")
 	}
 
-	ready := make(chan struct{})
-
 	go func() {
 		var err error
 		if tcp, err = StartBroker(TransportTCP, "localhost", "9990", loginFunc); err != nil {
 			log.Println(err)
 			return
 		}
-		ready <- struct{}{}
 		tcp.ListenAndServe()
 	}()
 
@@ -184,12 +181,8 @@ func TestMain(m *testing.M) {
 		if wss, err = StartBroker(TransportWebsocket, "localhost", "9991", loginFunc); err != nil {
 			log.Println(err)
 		}
-		ready <- struct{}{}
 		wss.ListenAndServe()
 	}()
-
-	<-ready
-	<-ready
 
 	ret := m.Run()
 	os.Exit(ret)

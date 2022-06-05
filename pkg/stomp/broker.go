@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cenkalti/backoff"
 	"github.com/google/uuid"
 )
 
@@ -170,9 +171,18 @@ func (sh *SessionHandler) send(cmd Command, headers map[Header]string, body []by
 		return err
 	}
 
-	if _, err := sh.conn.Write(f.Serialize()); err != nil {
-		fmt.Println(err)
+	sendIt := func() error {
+		if _, err := sh.conn.Write(f.Serialize()); err != nil {
+			log.Println(err)
+			return err
+		}
+		return nil
 	}
+
+	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+		return err
+	}
+
 	return nil
 }
 

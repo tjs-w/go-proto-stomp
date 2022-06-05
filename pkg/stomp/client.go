@@ -2,12 +2,12 @@ package stomp
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 
+	"github.com/cenkalti/backoff"
 	"github.com/google/uuid"
 )
 
@@ -119,15 +119,15 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 		for raw := range FrameScanner(c.conn) {
 			frame, err := NewFrameFromBytes(raw)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				break
 			}
 			if err = frame.Validate(ServerFrame); err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				break
 			}
 			if err = c.stateMachine(frame); err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				break
 			}
 		}
@@ -145,13 +145,11 @@ func (c *ClientHandler) stateMachine(frame *Frame) error {
 			c.msgHandler(c.getUserMessage(frame))
 		}
 	case CmdReceipt:
-		fmt.Println(frame.String())
 		if frame.headers[HdrKeyReceiptID] == DisconnectID {
 			c.conn.Close()
 			return errors.New("bye")
 		}
 	case CmdError:
-		fmt.Println(frame.String())
 		if err := c.Disconnect(); err != nil {
 			return err
 		}
@@ -164,9 +162,18 @@ func (c *ClientHandler) send(cmd Command, headers map[Header]string, body []byte
 	if err := f.Validate(ClientFrame); err != nil {
 		return err
 	}
-	if _, err := c.conn.Write(f.Serialize()); err != nil {
+
+	sendIt := func() error {
+		if _, err := c.conn.Write(f.Serialize()); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -183,7 +190,7 @@ func (c *ClientHandler) getUserMessage(f *Frame) *UserMessage {
 
 func (c *ClientHandler) connect() error {
 	headers := map[Header]string{
-		HdrKeyAcceptVersion: "1.2,1.1,1.0",
+		HdrKeyAcceptVersion: "1.2",
 		HdrKeyHost:          c.host,
 	}
 	if c.login != "" {

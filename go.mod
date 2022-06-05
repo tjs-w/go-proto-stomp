@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/RoaringBitmap/roaring v1.0.0
 	github.com/c-bata/go-prompt v0.2.6
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.13.0
 	github.com/google/go-cmp v0.5.8
