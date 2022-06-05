@@ -106,14 +106,14 @@ func (sh *SessionHandler) stateMachine(frame *Frame) error {
 		}
 
 	case CmdAck:
-		if err := processAck(frame.headers[HdrKeyID]); err != nil {
-			return err
-		}
+		// if err := processAck(frame.headers[HdrKeyID]); err != nil {
+		// 	return err
+		// }
 
 	case CmdNack:
-		if err := processNack(frame.headers[HdrKeyID]); err != nil {
-			return err
-		}
+		// if err := processNack(frame.headers[HdrKeyID]); err != nil {
+		// 	return err
+		// }
 
 	case CmdBegin:
 		if err := startTx(frame.headers[HdrKeyTransaction]); err != nil {

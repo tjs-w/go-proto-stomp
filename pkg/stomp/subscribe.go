@@ -138,34 +138,34 @@ func scanAckNum(fmtAck string) (dest string, subsID string, ackNum uint32, err e
 	return parts[0], parts[1], uint32(n), nil
 }
 
-func processAck(ackVal string) error {
-	dest, subsID, ackNum, err := scanAckNum(ackVal)
-	if err != nil {
-		return errorMsg(errBrokerStateMachine, "Invalid ACK value: "+ackVal)
-	}
-
-	if _, ok := destToSubsMap[dest]; !ok {
-		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
-	}
-
-	if _, ok := destToSubsMap[dest][subsID]; !ok {
-		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest+"/"+subsID)
-	}
-
-	info := destToSubsMap[dest][subsID]
-	info.Lock()
-	defer info.Unlock()
-	if info.ackMode == HdrValAckClient {
-		for i := info.pendingAckBitmap.Minimum(); info.pendingAckBitmap.Contains(i); i++ {
-			info.pendingAckBitmap.Remove(i)
-		}
-	} else if info.ackMode == HdrValAckClientIndividual {
-		info.pendingAckBitmap.Remove(ackNum)
-	}
-	return nil
-}
-
-func processNack(ackVal string) error {
-	// Do nothing
-	return nil
-}
+// func processAck(ackVal string) error {
+// 	dest, subsID, ackNum, err := scanAckNum(ackVal)
+// 	if err != nil {
+// 		return errorMsg(errBrokerStateMachine, "Invalid ACK value: "+ackVal)
+// 	}
+//
+// 	if _, ok := destToSubsMap[dest]; !ok {
+// 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
+// 	}
+//
+// 	if _, ok := destToSubsMap[dest][subsID]; !ok {
+// 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest+"/"+subsID)
+// 	}
+//
+// 	info := destToSubsMap[dest][subsID]
+// 	info.Lock()
+// 	defer info.Unlock()
+// 	if info.ackMode == HdrValAckClient {
+// 		for i := info.pendingAckBitmap.Minimum(); info.pendingAckBitmap.Contains(i); i++ {
+// 			info.pendingAckBitmap.Remove(i)
+// 		}
+// 	} else if info.ackMode == HdrValAckClientIndividual {
+// 		info.pendingAckBitmap.Remove(ackNum)
+// 	}
+// 	return nil
+// }
+//
+// func processNack(ackVal string) error {
+// 	// Do nothing
+// 	return nil
+// }
