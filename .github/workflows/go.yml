@@ -26,7 +26,22 @@ jobs:
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v3.2.0
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+
     - name: Test
       run: |
-        go test -v -coverpkg=github.com/tjs-w/go-proto-stomp/pkg/stomp/... -coverprofile=profile.cov ./...
-        go tool cover -func profile.cov
+        go test -v -race -covermode=atomic -coverpkg=github.com/tjs-w/go-proto-stomp/pkg/stomp/... \
+        -coverprofile=coverage.out ./...
+        go tool cover -func coverage.out -o cover.report
+        curl --data-binary @.codecov.yml https://codecov.io/validate
+
+    - name: Codecov
+      uses: codecov/codecov-action@v3.1.0
