@@ -10,11 +10,13 @@
 
 [<img width=40% src=https://stomp.github.io/images/project-logo.png>](https://stomp.github.io/index.html)
 
-**STOMP** stands for *Simple Text Oriented Messaging Protocol*
+_**S**imple **T**ext **O**riented **M**essaging **P**rotocol_
+
 
 ## STOMP Protocol Implementation in Golang (with interactive CLI)
 [![Go Reference](https://pkg.go.dev/badge/github.com/tjs-w/go-proto-stomp/.svg)](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/)
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/tjs-w/go-proto-stomp)](https://github.com/tjs-w/go-proto-stomp/releases/latest)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/tjs-w/go-proto-stomp)
 
 Includes:
 1. `stomper`: Interactive CLI for STOMP Client
@@ -95,6 +97,8 @@ header              = header-name ":" header-value
 header-name         = 1*<any OCTET except CR or LF or ":">
 header-value        = *<any OCTET except CR or LF or ":">
 ```
+_#stomp #protocol #broker #server #client #cli_
+
 ## License
 MIT License
 
