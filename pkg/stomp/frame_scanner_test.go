@@ -105,7 +105,7 @@ func testClientServer(t *testing.T, listen net.Listener, typ string) {
 		t.Error(err)
 	}
 
-	for rawFrame := range FrameScanner(conn) {
+	for rawFrame := range frameScanner(conn) {
 		t.Run(strings.Split(string(rawFrame), "\n")[0], func(t *testing.T) {
 			frame := Frame{}
 			if err = frame.Deserialize(rawFrame); err != nil {

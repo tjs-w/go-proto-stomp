@@ -48,7 +48,7 @@ func startTcpBroker(host, port string, loginFunc LoginFunc) (*tcpBroker, error) 
 				return
 			}
 			// Handle connections in a new goroutine.
-			go NewSessionHandler(conn, loginFunc, tcp.wgSessions).Start()
+			go NewSession(conn, loginFunc, tcp.wgSessions).Start()
 		}
 	}
 

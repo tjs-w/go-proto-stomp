@@ -35,7 +35,7 @@ func startWebsocketBroker(host, port string, loginFunc LoginFunc) (*wssBroker, e
 
 			conn := websocket.NetConn(context.Background(), c, websocket.MessageText)
 			wss.wgSessions = &sync.WaitGroup{}
-			go NewSessionHandler(conn, loginFunc, wss.wgSessions).Start()
+			go NewSession(conn, loginFunc, wss.wgSessions).Start()
 		}
 	})
 

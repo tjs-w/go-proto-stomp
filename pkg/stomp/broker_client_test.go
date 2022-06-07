@@ -3,6 +3,7 @@ package stomp
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -14,6 +15,10 @@ var (
 	tcp Broker
 	wss Broker
 )
+
+func init() {
+	log.SetOutput(ioutil.Discard)
+}
 
 func beginCommitTx(t *testing.T, c *ClientHandler, dest string, testValidateID int) {
 	tx, err := c.BeginTransaction()
@@ -59,21 +64,25 @@ func TestStartBroker(t *testing.T) {
 			dest := "/queue/foo"
 			testValidateID := 0
 
+			t.Log("Version:", ReleaseVersion())
+
 			c := NewClientHandler(test.transport, "localhost", test.port, &ClientOpts{
 				Host:      "",
 				Login:     "admin",
 				Passcode:  "9a$$w0rd",
 				HeartBeat: [2]int{},
-				MessageHandler: func(message *UserMessage) {
-					id, err := strconv.Atoi(string(message.Body))
-					if err != nil {
-						t.Error()
-					}
-					if err := validateCustomTestHeader(message.Headers, id); err != nil {
-						t.Error(err)
-					}
-				},
 			})
+
+			c.SetMessageHandler(func(message *UserMessage) {
+				id, err := strconv.Atoi(string(message.Body))
+				if err != nil {
+					t.Error()
+				}
+				if err := validateCustomTestHeader(message.Headers, id); err != nil {
+					t.Error(err)
+				}
+			})
+
 			if err = c.Connect(false); err != nil {
 				t.Error(err)
 			}
@@ -164,7 +173,7 @@ func TestMain(m *testing.M) {
 		if login == "admin" && passcode == "9a$$w0rd" {
 			return nil
 		}
-		return errors.New("authentication failed")
+		return errors.New("authN denied")
 	}
 
 	ready := make(chan struct{})

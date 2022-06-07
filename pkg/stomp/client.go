@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
 const (
 	// DisconnectID is used as a `receipt` header value in the DISCONNECT message from client
 	DisconnectID = "BYE-BYE!"
@@ -116,7 +120,7 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 	}
 
 	go func() {
-		for raw := range FrameScanner(c.conn) {
+		for raw := range frameScanner(c.conn) {
 			frame, err := NewFrameFromBytes(raw)
 			if err != nil {
 				log.Println(err)
@@ -203,7 +207,7 @@ func (c *ClientHandler) connect() error {
 
 func (c *ClientHandler) stomp() error {
 	headers := map[Header]string{
-		HdrKeyAcceptVersion: "1.2,1.1,1.0",
+		HdrKeyAcceptVersion: "1.2",
 		HdrKeyHost:          c.host,
 	}
 	if c.login != "" {

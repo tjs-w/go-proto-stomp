@@ -1,6 +1,7 @@
 package stomp
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -13,17 +14,27 @@ import (
 	"github.com/google/uuid"
 )
 
-// SessionHandler handles the STOMP client session on connection
-type SessionHandler struct {
+//go:generate sh -c "git describe --tags --abbrev=0 | tee version.txt"
+var (
+	//go:embed version*.txt
+	releaseVersion string
+)
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
+// Session handles the STOMP client session on connection
+type Session struct {
 	conn       net.Conn
 	sessionID  string
 	loginFunc  LoginFunc
 	wgSessions *sync.WaitGroup
 }
 
-// NewSessionHandler creates a new session object & maintains the session state internally
-func NewSessionHandler(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup) *SessionHandler {
-	return &SessionHandler{
+// NewSession creates a new session object & maintains the session state internally
+func NewSession(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup) *Session {
+	return &Session{
 		conn:       conn,
 		loginFunc:  loginFunc,
 		sessionID:  uuid.NewString(),
@@ -35,35 +46,35 @@ func NewSessionHandler(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup) *
 type LoginFunc func(login, passcode string) error
 
 // Start begins the STOMP session with the Client
-func (sh *SessionHandler) Start() {
-	defer sh.cleanup()
-	sh.wgSessions.Add(1)
-	for raw := range FrameScanner(sh.conn) {
+func (sess *Session) Start() {
+	defer sess.cleanup()
+	sess.wgSessions.Add(1)
+	for raw := range frameScanner(sess.conn) {
 		frame, err := NewFrameFromBytes(raw)
 		if err != nil {
-			_ = sh.sendError(err, fmt.Sprint("Frame serialization error:"+frame.String()))
+			_ = sess.sendError(err, fmt.Sprint("Frame serialization error:"+frame.String()))
 			return
 		}
 		if err = frame.Validate(ClientFrame); err != nil {
-			_ = sh.sendError(err, fmt.Sprint("Frame validation error:"+frame.String()))
+			_ = sess.sendError(err, fmt.Sprint("Frame validation error:"+frame.String()))
 			return
 		}
 
-		if err = sh.stateMachine(frame); err != nil {
+		if err = sess.stateMachine(frame); err != nil {
 			log.Println(err)
 			return
 		}
 	}
 }
 
-func (sh *SessionHandler) cleanup() {
-	sh.conn.Close()
-	sh.wgSessions.Done()
+func (sess *Session) cleanup() {
+	sess.conn.Close()
+	sess.wgSessions.Done()
 }
 
 // sendError is the helper function to send the ERROR frames
-func (sh *SessionHandler) sendError(err error, payload string) error {
-	return sh.send(CmdError, map[Header]string{
+func (sess *Session) sendError(err error, payload string) error {
+	return sess.send(CmdError, map[Header]string{
 		HdrKeyContentType:   "text/plain",
 		HdrKeyContentLength: strconv.Itoa(len(payload)),
 		HdrKeyMessage:       err.Error(),
@@ -71,16 +82,16 @@ func (sh *SessionHandler) sendError(err error, payload string) error {
 }
 
 // stateMachine is the brain of the protocol
-func (sh *SessionHandler) stateMachine(frame *Frame) error {
+func (sess *Session) stateMachine(frame *Frame) error {
 	switch frame.command {
 	case CmdConnect, CmdStomp:
-		if err := sh.handleConnect(frame); err != nil {
+		if err := sess.handleConnect(frame); err != nil {
 			return err
 		}
 
 	case CmdSend:
 		// If the message is part of an ongoing transaction
-		if txID, ok := frame.headers[HdrKeyTransaction]; ok && frame.headers[HdrKeyTransaction] != "" {
+		if txID := frame.getHeader(HdrKeyTransaction); txID != "" {
 			if err := bufferTxMessage(txID, frame); err != nil {
 				return err
 			}
@@ -96,7 +107,7 @@ func (sh *SessionHandler) stateMachine(frame *Frame) error {
 		if _, ok := frame.headers[HdrKeyAck]; ok {
 			ack = AckMode(frame.headers[HdrKeyAck])
 		}
-		if err := addSubscription(frame.headers[HdrKeyDestination], frame.headers[HdrKeyID], ack, sh); err != nil {
+		if err := addSubscription(frame.headers[HdrKeyDestination], frame.headers[HdrKeyID], ack, sess); err != nil {
 			return err
 		}
 
@@ -139,14 +150,14 @@ func (sh *SessionHandler) stateMachine(frame *Frame) error {
 		}
 
 	case CmdDisconnect:
-		_ = cleanupSubscriptions(sh.sessionID)
-		_ = sh.send(CmdReceipt, map[Header]string{HdrKeyReceiptID: frame.headers[HdrKeyReceipt]}, nil)
-		sh.conn.Close()
+		_ = cleanupSubscriptions(sess.sessionID)
+		_ = sess.send(CmdReceipt, map[Header]string{HdrKeyReceiptID: frame.headers[HdrKeyReceipt]}, nil)
+		sess.conn.Close()
 	}
 	return nil
 }
 
-func (sh *SessionHandler) sendMessage(dest, subsID string, ackNum uint32, txID string, headers map[Header]string,
+func (sess *Session) sendMessage(dest, subsID string, ackNum uint32, txID string, headers map[Header]string,
 	body []byte) error {
 	h := map[Header]string{
 		HdrKeyDestination:  dest,
@@ -160,10 +171,10 @@ func (sh *SessionHandler) sendMessage(dest, subsID string, ackNum uint32, txID s
 	for k, v := range headers {
 		h[Header(strings.ToLower(string(k)))] = v
 	}
-	return sh.send(CmdMessage, h, body)
+	return sess.send(CmdMessage, h, body)
 }
 
-func (sh *SessionHandler) send(cmd Command, headers map[Header]string, body []byte) error {
+func (sess *Session) send(cmd Command, headers map[Header]string, body []byte) error {
 	f := NewFrame(cmd, headers, body)
 
 	// Make this check optional later
@@ -172,7 +183,7 @@ func (sh *SessionHandler) send(cmd Command, headers map[Header]string, body []by
 	}
 
 	sendIt := func() error {
-		if _, err := sh.conn.Write(f.Serialize()); err != nil {
+		if _, err := sess.conn.Write(f.Serialize()); err != nil {
 			log.Println(err)
 			return err
 		}
@@ -187,7 +198,7 @@ func (sh *SessionHandler) send(cmd Command, headers map[Header]string, body []by
 }
 
 // handleConnect responds to the CONNECT message from client
-func (sh *SessionHandler) handleConnect(f *Frame) error {
+func (sess *Session) handleConnect(f *Frame) error {
 	// Version
 	ver := ""
 	for _, v := range strings.Split(f.headers[HdrKeyAcceptVersion], ",") {
@@ -198,16 +209,16 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 	}
 	if ver == "" {
 		// Send version ERROR
-		err := sh.sendError(errors.New("version mismatch"),
+		err := sess.sendError(errors.New("version mismatch"),
 			"Server supported versions: 1.2. Received:"+f.String())
 		return errorMsg(errBrokerStateMachine, "Invalid client version received: "+f.String()+"::"+err.Error())
 	}
 
 	// Authentication
-	if sh.loginFunc != nil {
+	if sess.loginFunc != nil {
 		login, passcode := f.getHeader(HdrKeyLogin), f.getHeader(HdrKeyPassCode)
-		if err := sh.loginFunc(login, passcode); err != nil {
-			_ = sh.sendError(errors.New("login failed"), "Authentication failed:\n"+err.Error())
+		if err := sess.loginFunc(login, passcode); err != nil {
+			_ = sess.sendError(errors.New("login failed"), "Authentication failed:\n"+err.Error())
 			return errorMsg(errBrokerStateMachine, "Login error: "+err.Error())
 		}
 	}
@@ -215,10 +226,10 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 	// ToDo Heartbeats
 
 	// Respond with CONNECTED
-	if err := sh.send(CmdConnected, map[Header]string{
+	if err := sess.send(CmdConnected, map[Header]string{
 		HdrKeyVersion:   ver,
-		HdrKeySession:   sh.sessionID,
-		HdrKeyServer:    "go-proto-stomp/v1.0.0",
+		HdrKeySession:   sess.sessionID,
+		HdrKeyServer:    "go-proto-stomp/" + releaseVersion,
 		HdrKeyHeartBeat: "0,0",
 	}, nil); err != nil {
 		return err
@@ -227,8 +238,13 @@ func (sh *SessionHandler) handleConnect(f *Frame) error {
 	return nil
 }
 
+// Broker lists the methods supported by the STOMP brokers
 type Broker interface {
+
+	// ListenAndServe is a blocking method that keeps accepting the client connections and handles the STOMP messages.
 	ListenAndServe()
+
+	// Shutdown should be called to bring down the underlying server gracefully.
 	Shutdown()
 }
 
@@ -253,4 +269,9 @@ func StartBroker(transport Transport, host, port string, loginFunc LoginFunc) (B
 		broker = wss
 	}
 	return broker, nil
+}
+
+// ReleaseVersion returns the version of the go-proto-stomp module
+func ReleaseVersion() string {
+	return releaseVersion
 }

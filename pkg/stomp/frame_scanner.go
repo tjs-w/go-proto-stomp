@@ -96,9 +96,9 @@ func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx err
 	return end, data[frameStart:end], nil
 }
 
-// FrameScanner reads from the reader and splits the byte-stream into chucks around the Frame delimiter/length.
+// frameScanner reads from the reader and splits the byte-stream into chucks around the Frame delimiter/length.
 // These chunks are then sent over the returned channel.
-func FrameScanner(conn io.Reader) <-chan []byte {
+func frameScanner(conn io.Reader) <-chan []byte {
 	scanner := bufio.NewScanner(conn)
 	scanner.Split(frameSplitter)
 
@@ -108,7 +108,7 @@ func FrameScanner(conn io.Reader) <-chan []byte {
 			ch <- scanner.Bytes()
 		}
 		if err := scanner.Err(); err != nil {
-			log.Println(errFrameScanner, "FrameScanner finished:", err)
+			log.Println(errFrameScanner, "frameScanner finished:", err)
 		}
 		close(ch)
 	}()

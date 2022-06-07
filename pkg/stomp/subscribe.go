@@ -14,7 +14,7 @@ import (
 type subsInfo struct {
 	sync.Mutex
 
-	sessionHandler   *SessionHandler
+	sessionHandler   *Session
 	ackMode          AckMode
 	nextAckNum       uint32
 	pendingAckBitmap roaring.Bitmap
@@ -34,7 +34,7 @@ var (
 	subsToDestMap = map[string]string{}
 )
 
-func addSubscription(dest string, subsID string, ackMode AckMode, sess *SessionHandler) error {
+func addSubscription(dest string, subsID string, ackMode AckMode, sess *Session) error {
 	if _, ok := destToSubsMap[dest][subsID]; !ok {
 		destToSubsMap[dest] = subsToInfo{}
 	}
