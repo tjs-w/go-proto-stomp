@@ -12,10 +12,10 @@ func main() {
 	flag.Parse()
 	host := "localhost"
 	port := stomp.DefaultPort
-	if "" != flag.Arg(0) {
+	if flag.Arg(0) != "" {
 		host = flag.Arg(0)
 	}
-	if "" != flag.Arg(1) {
+	if flag.Arg(1) != "" {
 		port = flag.Arg(1)
 	}
 

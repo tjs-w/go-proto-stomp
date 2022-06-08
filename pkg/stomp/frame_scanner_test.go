@@ -55,7 +55,9 @@ func client(t *testing.T, typ string) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	w := bufio.NewWriter(conn)
 	ch := readInChunks(t, typ)
@@ -69,7 +71,7 @@ func client(t *testing.T, typ string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 func server(t *testing.T) net.Listener {
@@ -82,7 +84,9 @@ func server(t *testing.T) net.Listener {
 
 func TestFrameScanner(t *testing.T) {
 	listen := server(t)
-	defer listen.Close()
+	defer func() {
+		_ = listen.Close()
+	}()
 	t.Parallel()
 
 	// Test Client Commands

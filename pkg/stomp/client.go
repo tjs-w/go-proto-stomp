@@ -16,8 +16,8 @@ func init() {
 }
 
 const (
-	// DisconnectID is used as a `receipt` header value in the DISCONNECT message from client
-	DisconnectID = "BYE-BYE!"
+	// disconnectID is used as a `receipt` header value in the DISCONNECT message from client
+	disconnectID = "BYE-BYE!"
 )
 
 // Transport represents the underlying transporting protocol for STOMP
@@ -149,9 +149,9 @@ func (c *ClientHandler) stateMachine(frame *Frame) error {
 			c.msgHandler(c.getUserMessage(frame))
 		}
 	case CmdReceipt:
-		if frame.headers[HdrKeyReceiptID] == DisconnectID {
-			c.conn.Close()
-			return errors.New("bye")
+		if frame.headers[HdrKeyReceiptID] == disconnectID {
+			_ = c.conn.Close()
+			return errors.New("bye") // Returning error will close the connection
 		}
 	case CmdError:
 		if err := c.Disconnect(); err != nil {
@@ -231,7 +231,7 @@ func (c *ClientHandler) Send(dest string, body []byte, contentType string, custo
 }
 
 func (c *ClientHandler) Disconnect() error {
-	return c.send(CmdDisconnect, map[Header]string{HdrKeyReceipt: DisconnectID}, nil)
+	return c.send(CmdDisconnect, map[Header]string{HdrKeyReceipt: disconnectID}, nil)
 }
 
 func (c *ClientHandler) Subscribe(dest string, mode AckMode) (*Subscription, error) {

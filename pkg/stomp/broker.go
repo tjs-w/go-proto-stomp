@@ -68,7 +68,7 @@ func (sess *Session) Start() {
 }
 
 func (sess *Session) cleanup() {
-	sess.conn.Close()
+	_ = sess.conn.Close()
 	sess.wgSessions.Done()
 }
 
@@ -103,7 +103,7 @@ func (sess *Session) stateMachine(frame *Frame) error {
 		}
 
 	case CmdSubscribe:
-		var ack = HdrValAckAuto
+		ack := HdrValAckAuto
 		if _, ok := frame.headers[HdrKeyAck]; ok {
 			ack = AckMode(frame.headers[HdrKeyAck])
 		}
@@ -152,13 +152,14 @@ func (sess *Session) stateMachine(frame *Frame) error {
 	case CmdDisconnect:
 		_ = cleanupSubscriptions(sess.sessionID)
 		_ = sess.send(CmdReceipt, map[Header]string{HdrKeyReceiptID: frame.headers[HdrKeyReceipt]}, nil)
-		sess.conn.Close()
+		_ = sess.conn.Close()
 	}
 	return nil
 }
 
 func (sess *Session) sendMessage(dest, subsID string, ackNum uint32, txID string, headers map[Header]string,
-	body []byte) error {
+	body []byte,
+) error {
 	h := map[Header]string{
 		HdrKeyDestination:  dest,
 		HdrKeyMessageID:    uuid.NewString(),
@@ -240,7 +241,6 @@ func (sess *Session) handleConnect(f *Frame) error {
 
 // Broker lists the methods supported by the STOMP brokers
 type Broker interface {
-
 	// ListenAndServe is a blocking method that keeps accepting the client connections and handles the STOMP messages.
 	ListenAndServe()
 
