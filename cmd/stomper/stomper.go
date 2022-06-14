@@ -43,29 +43,26 @@ func errorMsg(s string) {
 
 func okMsg(s string) {
 	_, _ = okPrint.Println(s)
-
 }
 
-var (
-	suggestions = []prompt.Suggest{
-		// STOMP Commands
-		{Text: "connect", Description: "Connect to a STOMP broker"},
-		{Text: "disconnect", Description: "Disconnect from the STOMP broker"},
-		{Text: "subscribe", Description: "Subscribe to a destination on broker"},
-		{Text: "unsubscribe", Description: "Unsubscribe from a destination on broker"},
-		{Text: "send", Description: "Send a message to a destination on broker"},
-		{Text: "tx_leave", Description: "Leave an ongoing transaction"},
-		{Text: "tx_enter", Description: "Enter an ongoing transaction"},
-		{Text: "tx_begin", Description: "Start a transaction"},
-		{Text: "tx_abort", Description: "Abort the transaction"},
-		{Text: "tx_commit", Description: "Commit the transaction"},
-		{Text: "session", Description: "Show session info"},
-		{Text: "read", Description: "Read received messages"},
-		{Text: "help", Description: "Display commands help"},
-		{Text: "bye", Description: "End session by disconnecting from the STOMP broker"},
-		{Text: "quit", Description: "End session by disconnecting from the STOMP broker"},
-	}
-)
+var suggestions = []prompt.Suggest{
+	// STOMP Commands
+	{Text: "connect", Description: "Connect to a STOMP broker"},
+	{Text: "disconnect", Description: "Disconnect from the STOMP broker"},
+	{Text: "subscribe", Description: "Subscribe to a destination on broker"},
+	{Text: "unsubscribe", Description: "Unsubscribe from a destination on broker"},
+	{Text: "send", Description: "Send a message to a destination on broker"},
+	{Text: "tx_leave", Description: "Leave an ongoing transaction"},
+	{Text: "tx_enter", Description: "Enter an ongoing transaction"},
+	{Text: "tx_begin", Description: "Start a transaction"},
+	{Text: "tx_abort", Description: "Abort the transaction"},
+	{Text: "tx_commit", Description: "Commit the transaction"},
+	{Text: "session", Description: "Show session info"},
+	{Text: "read", Description: "Read received messages"},
+	{Text: "help", Description: "Display commands help"},
+	{Text: "bye", Description: "End session by disconnecting from the STOMP broker"},
+	{Text: "quit", Description: "End session by disconnecting from the STOMP broker"},
+}
 
 var headerSuggestions = []prompt.Suggest{
 	// HTTP Header
@@ -91,7 +88,7 @@ var headerSuggestions = []prompt.Suggest{
 	{Text: "Expect", Description: "Expected behaviors supported by server"},
 	{Text: "Forwarded", Description: "Proxies involved"},
 	{Text: "From", Description: "Sender email address"},
-	{Text: "Host", Description: "Target URI"},
+	{Text: "VirtualHost", Description: "Target URI"},
 	{Text: "HTTP2-Settings", Description: "HTTP/2 connection parameters"},
 	{Text: "If", Description: "Request condition on state tokens and ETags"},
 	{Text: "If-Match", Description: "Request condition on target resource"},
@@ -119,7 +116,7 @@ var headerSuggestions = []prompt.Suggest{
 	{Text: "X-Csrf-Token", Description: "Prevent cross-site request forgery"},
 	{Text: "X-CSRFToken", Description: "Prevent cross-site request forgery"},
 	{Text: "X-Forwarded-For", Description: "Originating client IP address"},
-	{Text: "X-Forwarded-Host", Description: "Original host requested by client"},
+	{Text: "X-Forwarded-VirtualHost", Description: "Original host requested by client"},
 	{Text: "X-Forwarded-Proto", Description: "Originating protocol"},
 	{Text: "X-Http-Method-Override", Description: "Request method override"},
 	{Text: "X-Requested-With", Description: "Used to identify Ajax requests"},
@@ -143,10 +140,7 @@ func setupConnection(host string, port string, t stomp.Transport) {
 	}
 
 	ctx.client = stomp.NewClientHandler(t, host, port, &stomp.ClientOpts{
-		Host:           host,
-		Login:          "",
-		Passcode:       "",
-		HeartBeat:      [2]int{},
+		VirtualHost:    host,
 		MessageHandler: msgHandler,
 	})
 }
@@ -430,7 +424,7 @@ func completion(d prompt.Document) []prompt.Suggest {
 }
 
 func main() {
-	transport = *flag.String("t", "websocket", "transport for STOMP protocol (tcp, websocket)")
+	flag.StringVar(&transport, "t", "websocket", "transport for STOMP protocol (tcp, websocket)")
 	flag.Parse()
 
 	prompt.New(

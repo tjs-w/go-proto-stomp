@@ -2,30 +2,20 @@ package stomp
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/cenkalti/backoff"
+	"github.com/go-co-op/gocron"
 	"github.com/google/uuid"
 )
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
 
 const (
 	// disconnectID is used as a `receipt` header value in the DISCONNECT message from client
 	disconnectID = "BYE-BYE!"
-)
-
-// Transport represents the underlying transporting protocol for STOMP
-type Transport string
-
-var (
-	TransportTCP       Transport = "TCP"       // STOMP over TCP
-	TransportWebsocket Transport = "Websocket" // STOMP over Websocket
 )
 
 // UserMessage represents the messages and the user-headers to be received by the user
@@ -52,22 +42,25 @@ type MessageHandlerFunc func(message *UserMessage)
 
 // ClientHandler is the control struct for Client's connection with the STOMP Broker
 type ClientHandler struct {
-	SessionID  string             // Session ID for the connection with the STOMP Broker
-	conn       net.Conn           // Connection to the server/broker
-	host       string             // Virtual-host on the STOMP broker
-	login      string             // Username for the login to STOMP broker
-	passcode   string             // Password to log in to the STOMP broker
-	hearBeat   [2]int             // Values in milliseconds, 0 - Send timeout, 1 - Receive timeout
-	msgHandler MessageHandlerFunc // Callback to process the MESSAGE
+	SessionID      string             // Session ID for the connection with the STOMP Broker
+	conn           net.Conn           // Connection to the server/broker
+	host           string             // Virtual-host on the STOMP broker
+	login          string             // Username for the login to STOMP broker
+	passcode       string             // Password to log in to the STOMP broker
+	hbSendInterval int                // Send-interval in milliseconds from client
+	hbRecvInterval int                // Receive-interval in milliseconds on client
+	hbJob          *gocron.Job        // Heartbeat sending job
+	msgHandler     MessageHandlerFunc // Callback to process the MESSAGE
 }
 
 // ClientOpts provides the options as argument to NewClientHandler
 type ClientOpts struct {
-	Host           string             // Virtual host
-	Login          string             // AuthN Username
-	Passcode       string             // AuthN Password
-	HeartBeat      [2]int             // HeartBeats config [2]int{ outgoing-freq, incoming-freq }
-	MessageHandler MessageHandlerFunc // User-defined callback function to handle MESSAGE
+	VirtualHost              string             // Virtual host
+	Login                    string             // AuthN Username
+	Passcode                 string             // AuthN Password
+	HeartbeatSendInterval    int                // Sending interval of heartbeats in milliseconds
+	HeartbeatReceiveInterval int                // Receiving interval of heartbeats in milliseconds
+	MessageHandler           MessageHandlerFunc // User-defined callback function to handle MESSAGE
 }
 
 // NewClientHandler creates the Client for STOMP
@@ -89,16 +82,17 @@ func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) 
 		opts = &ClientOpts{}
 	}
 
-	if opts.Host == "" {
-		opts.Host = conn.RemoteAddr().String()
+	if opts.VirtualHost == "" {
+		opts.VirtualHost = conn.RemoteAddr().String()
 	}
 	return &ClientHandler{
-		conn:       conn,
-		host:       opts.Host,
-		login:      opts.Login,
-		passcode:   opts.Passcode,
-		hearBeat:   opts.HeartBeat,
-		msgHandler: opts.MessageHandler,
+		conn:           conn,
+		host:           opts.VirtualHost,
+		login:          opts.Login,
+		passcode:       opts.Passcode,
+		hbSendInterval: opts.HeartbeatSendInterval,
+		hbRecvInterval: opts.HeartbeatReceiveInterval,
+		msgHandler:     opts.MessageHandler,
 	}
 }
 
@@ -109,14 +103,8 @@ func (c *ClientHandler) SetMessageHandler(handlerFunc MessageHandlerFunc) {
 
 // Connect connects with the broker and starts listening to the messages from broker
 func (c *ClientHandler) Connect(useStompCmd bool) error {
-	if useStompCmd {
-		if err := c.stomp(); err != nil {
-			return err
-		}
-	} else {
-		if err := c.connect(); err != nil {
-			return err
-		}
+	if err := c.connect(useStompCmd); err != nil {
+		return err
 	}
 
 	go func() {
@@ -135,6 +123,11 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 				break
 			}
 		}
+
+		// Cleanup
+		if c.hbJob != nil {
+			sched.RemoveByReference(c.hbJob)
+		}
 	}()
 	return nil
 }
@@ -144,6 +137,11 @@ func (c *ClientHandler) stateMachine(frame *Frame) error {
 	switch frame.command {
 	case CmdConnected:
 		c.SessionID = frame.headers[HdrKeySession]
+		if hbVal := frame.getHeader(HdrKeyHeartBeat); hbVal != "" {
+			if err := c.negotiateHeartbeats(hbVal); err != nil {
+				return err
+			}
+		}
 	case CmdMessage:
 		if c.msgHandler != nil {
 			c.msgHandler(c.getUserMessage(frame))
@@ -181,6 +179,67 @@ func (c *ClientHandler) send(cmd Command, headers map[Header]string, body []byte
 	return nil
 }
 
+func (c *ClientHandler) sendRaw(body []byte) error {
+	sendIt := func() error {
+		if _, err := c.conn.Write(body); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *ClientHandler) negotiateHeartbeats(hbVal string) error {
+	intervals := strings.Split(hbVal, ",")
+	if len(intervals) != 2 {
+		return errorMsg(errClientStateMachine, "Invalid heartbeat header: "+hbVal)
+	}
+
+	// Send-HB negotiation
+	brokerSendInterval, err := strconv.Atoi(intervals[0])
+	if err != nil {
+		return errorMsg(errClientStateMachine,
+			"Invalid heartbeat header send interval from client: "+hbVal)
+	}
+	if brokerSendInterval == 0 || c.hbRecvInterval == 0 {
+		c.hbRecvInterval = 0
+	} else if brokerSendInterval > c.hbRecvInterval {
+		c.hbRecvInterval = brokerSendInterval
+	}
+
+	// Receive-HB negotiation
+	brokerRecvInterval, err := strconv.Atoi(intervals[1])
+	if err != nil {
+		return errorMsg(errClientStateMachine,
+			"Invalid heartbeat header receive interval from client: "+hbVal)
+	}
+	if brokerRecvInterval == 0 || c.hbSendInterval == 0 {
+		c.hbSendInterval = 0
+	} else if brokerRecvInterval > c.hbSendInterval {
+		c.hbSendInterval = brokerRecvInterval
+	}
+
+	// Schedule sending heartbeats by hbSendInterval
+	if c.hbSendInterval == 0 { // no heartbeats to be sent
+		return nil
+	}
+	c.hbJob, err = sched.Every(c.hbSendInterval).Milliseconds().Tag(c.SessionID).Do(
+		func() {
+			_ = c.sendRaw([]byte("\n"))
+		})
+	if err != nil {
+		return errorMsg(errClientStateMachine, "Heartbeat setup error: "+err.Error())
+	}
+	sched.StartAsync()
+
+	return nil
+}
+
 func (c *ClientHandler) getUserMessage(f *Frame) *UserMessage {
 	userHeaders := map[string]string{}
 	for h, v := range f.headers {
@@ -192,7 +251,7 @@ func (c *ClientHandler) getUserMessage(f *Frame) *UserMessage {
 	}
 }
 
-func (c *ClientHandler) connect() error {
+func (c *ClientHandler) connect(useStomp bool) error {
 	headers := map[Header]string{
 		HdrKeyAcceptVersion: "1.2",
 		HdrKeyHost:          c.host,
@@ -201,21 +260,15 @@ func (c *ClientHandler) connect() error {
 		headers[HdrKeyLogin] = c.login
 		headers[HdrKeyPassCode] = c.passcode
 	}
-	// ToDo HeartBeats
-	return c.send(CmdConnect, headers, nil)
-}
+	if c.hbSendInterval != 0 || c.hbRecvInterval != 0 {
+		headers[HdrKeyHeartBeat] = fmt.Sprintf("%d,%d", c.hbSendInterval, c.hbRecvInterval)
+	}
 
-func (c *ClientHandler) stomp() error {
-	headers := map[Header]string{
-		HdrKeyAcceptVersion: "1.2",
-		HdrKeyHost:          c.host,
+	cmd := CmdConnect
+	if useStomp {
+		cmd = CmdStomp
 	}
-	if c.login != "" {
-		headers[HdrKeyLogin] = c.login
-		headers[HdrKeyPassCode] = c.passcode
-	}
-	// ToDo HeartBeats
-	return c.send(CmdStomp, headers, nil)
+	return c.send(cmd, headers, nil)
 }
 
 func (c *ClientHandler) Send(dest string, body []byte, contentType string, customHeaders map[string]string) error {

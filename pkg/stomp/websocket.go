@@ -15,13 +15,14 @@ import (
 
 type wssBroker struct {
 	httpServer *http.Server
-	wgSessions *sync.WaitGroup
 }
 
 // startWebsocketBroker is starts the STOMP broker on Websocket server
-func startWebsocketBroker(host, port string, loginFunc LoginFunc) (*wssBroker, error) {
+func startWebsocketBroker(opts *BrokerOpts) (*wssBroker, error) {
 	wss := &wssBroker{}
+
 	broker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wgSessions := &sync.WaitGroup{}
 		for {
 			c, err := websocket.Accept(w, r,
 				&websocket.AcceptOptions{
@@ -29,21 +30,21 @@ func startWebsocketBroker(host, port string, loginFunc LoginFunc) (*wssBroker, e
 				})
 			if err != nil {
 				log.Println(err)
-				return
+				break
 			}
-			log.Println(r.Context())
 
 			conn := websocket.NetConn(context.Background(), c, websocket.MessageText)
-			wss.wgSessions = &sync.WaitGroup{}
-			go NewSession(conn, loginFunc, wss.wgSessions).Start()
+			wgSessions.Add(1)
+			go NewSession(conn, opts.LoginFunc, wgSessions, opts.HeartbeatSendIntervalMsec,
+				opts.HeartbeatReceiveIntervalMsec).Start()
 		}
+		wgSessions.Wait()
 	})
 
 	wss.httpServer = &http.Server{
-		Addr:    host + ":" + port,
+		Addr:    opts.Host + ":" + opts.Port,
 		Handler: broker,
 	}
-	wss.wgSessions = &sync.WaitGroup{}
 
 	// Handle sigterm and await termChan signal
 	termChan := make(chan os.Signal, 2)
@@ -56,6 +57,7 @@ func startWebsocketBroker(host, port string, loginFunc LoginFunc) (*wssBroker, e
 	return wss, nil
 }
 
+// ListenAndServe accepts the websocket client connections and servers the STOMP requests
 func (wss *wssBroker) ListenAndServe() {
 	if err := wss.httpServer.ListenAndServe(); err != nil {
 		log.Println(err)
@@ -63,9 +65,9 @@ func (wss *wssBroker) ListenAndServe() {
 	}
 }
 
+// Shutdown brings down the websocket server gracefully
 func (wss *wssBroker) Shutdown() {
 	log.Println("Shutdown initiated ...")
-	wss.wgSessions.Wait()
 	if err := wss.httpServer.Shutdown(context.Background()); err != nil {
 		log.Println(err)
 	}
