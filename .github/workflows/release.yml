@@ -61,4 +61,5 @@ jobs:
       - name: Release go-proto-stomp module
         run: |
           release=$(git describe --tags --abbrev=0)
-          GOPROXY=proxy.golang.org go list -m github.com/tjs-w/go-proto-stomp/pkg/stomp@${release}
+          echo "Release version: ${release}"
+          GOPROXY=proxy.golang.org go list -m github.com/tjs-w/go-proto-stomp@${release}

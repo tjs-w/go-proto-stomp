@@ -52,7 +52,7 @@ import "github.com/tjs-w/go-proto-stomp/pkg/stomp"
 ```
 
 ## STOMP Library Documentation
-*[Go Doc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp@v0.1.0/pkg/stomp)* lists the APIs for integrating both the
+*[GoDoc](https://pkg.go.dev/github.com/tjs-w/go-proto-stomp/pkg/stomp)* lists the APIs for integrating both the
 STOMP Broker and Client.
 ## **[STOMP Protocol Specification](https://stomp.github.io/stomp-specification-1.2.html)**
 The implementation adheres to the spec leaning towards the _version 1.2_ of the protocol.

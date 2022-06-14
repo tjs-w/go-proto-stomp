@@ -26,7 +26,14 @@ func main() {
 
 	var err error
 	var broker stomp.Broker
-	if broker, err = stomp.StartBroker(t, host, port, nil); err != nil {
+	if broker, err = stomp.StartBroker(&stomp.BrokerOpts{
+		Transport:                    t,
+		Host:                         host,
+		Port:                         port,
+		LoginFunc:                    nil,
+		HeartbeatSendIntervalMsec:    5000,
+		HeartbeatReceiveIntervalMsec: 5000,
+	}); err != nil {
 		log.Fatalln(err)
 	}
 	broker.ListenAndServe()

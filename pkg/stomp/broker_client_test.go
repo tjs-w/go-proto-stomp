@@ -67,10 +67,11 @@ func TestStartBroker(t *testing.T) {
 			t.Log("Version:", ReleaseVersion())
 
 			c := NewClientHandler(test.transport, "localhost", test.port, &ClientOpts{
-				Host:      "",
-				Login:     "admin",
-				Passcode:  "9a$$w0rd",
-				HeartBeat: [2]int{},
+				VirtualHost:              "",
+				Login:                    "admin",
+				Passcode:                 "9a$$w0rd",
+				HeartbeatSendInterval:    3,
+				HeartbeatReceiveInterval: 3,
 			})
 
 			c.SetMessageHandler(func(message *UserMessage) {
@@ -112,12 +113,17 @@ func TestStartBroker(t *testing.T) {
 			}
 
 			// Error frame
-			if err = sendErrorFrame(t, test.transport, test.port); err != nil {
+			if err = sendErrorFrame(test.transport, test.port); err != nil {
 				t.Error(err)
 			}
 
 			// Wrong login
-			if err = failedLogin(t, test.transport, test.port); err != nil {
+			if err = failedLogin(test.transport, test.port); err != nil {
+				t.Error(err)
+			}
+
+			// Wrong Heartbeat
+			if err = sendWrongHeartbeat(test.transport, test.port); err != nil {
 				t.Error(err)
 			}
 		})
@@ -127,7 +133,7 @@ func TestStartBroker(t *testing.T) {
 	wss.Shutdown()
 }
 
-func failedLogin(t *testing.T, transport Transport, port string) error {
+func failedLogin(transport Transport, port string) error {
 	cx := NewClientHandler(transport, "localhost", port, nil)
 	if err := cx.Connect(true); err != nil {
 		return err
@@ -138,12 +144,64 @@ func failedLogin(t *testing.T, transport Transport, port string) error {
 	return nil
 }
 
-func sendErrorFrame(t *testing.T, transport Transport, port string) error {
+func sendWrongHeartbeat(transport Transport, port string) error {
+	c := NewClientHandler(transport, "localhost", port, nil)
+	headers := map[Header]string{
+		HdrKeyHost:          "host",
+		HdrKeyAcceptVersion: "1.2",
+		HdrKeyHeartBeat:     "000",
+		HdrKeyLogin:         "admin",
+		HdrKeyPassCode:      "9a$$w0rd",
+	}
+	if err := c.send(CmdConnect, headers, []byte{}); err != nil {
+		return err
+	}
+
+	c = NewClientHandler(transport, "localhost", port, nil)
+	headers = map[Header]string{
+		HdrKeyHost:          "host",
+		HdrKeyAcceptVersion: "1.2",
+		HdrKeyHeartBeat:     "A,B",
+		HdrKeyLogin:         "admin",
+		HdrKeyPassCode:      "9a$$w0rd",
+	}
+	if err := c.send(CmdConnect, headers, []byte{}); err != nil {
+		return err
+	}
+
+	c = NewClientHandler(transport, "localhost", port, nil)
+	headers = map[Header]string{
+		HdrKeyHost:          "host",
+		HdrKeyAcceptVersion: "1.2",
+		HdrKeyHeartBeat:     "7,B",
+		HdrKeyLogin:         "admin",
+		HdrKeyPassCode:      "9a$$w0rd",
+	}
+	if err := c.send(CmdConnect, headers, []byte{}); err != nil {
+		return err
+	}
+
+	c = NewClientHandler(transport, "localhost", port, nil)
+	headers = map[Header]string{
+		HdrKeyHost:          "host",
+		HdrKeyAcceptVersion: "1.2.999",
+		HdrKeyHeartBeat:     "1,8",
+		HdrKeyLogin:         "admin",
+		HdrKeyPassCode:      "9a$$w0rd",
+	}
+	if err := c.send(CmdConnect, headers, []byte{}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func sendErrorFrame(transport Transport, port string) error {
 	c := NewClientHandler(transport, "localhost", port, nil)
 	if err := c.Connect(true); err != nil {
 		return err
 	}
-	f := NewFrame(Command("WRONG_HEADER"), nil, nil)
+	f := NewFrame("WRONG_HEADER", nil, nil)
 	if _, err := c.conn.Write(f.Serialize()); err != nil {
 		return err
 	}
@@ -180,7 +238,14 @@ func TestMain(m *testing.M) {
 
 	go func() {
 		var err error
-		if tcp, err = StartBroker(TransportTCP, "localhost", "9990", loginFunc); err != nil {
+		if tcp, err = StartBroker(&BrokerOpts{
+			Transport:                    TransportTCP,
+			Host:                         "localhost",
+			Port:                         "9990",
+			LoginFunc:                    loginFunc,
+			HeartbeatSendIntervalMsec:    2,
+			HeartbeatReceiveIntervalMsec: 2,
+		}); err != nil {
 			log.Println(err)
 			return
 		}
@@ -190,7 +255,14 @@ func TestMain(m *testing.M) {
 
 	go func() {
 		var err error
-		if wss, err = StartBroker(TransportWebsocket, "localhost", "9991", loginFunc); err != nil {
+		if wss, err = StartBroker(&BrokerOpts{
+			Transport:                    TransportWebsocket,
+			Host:                         "localhost",
+			Port:                         "9991",
+			LoginFunc:                    loginFunc,
+			HeartbeatSendIntervalMsec:    0,
+			HeartbeatReceiveIntervalMsec: 0,
+		}); err != nil {
 			log.Println(err)
 		}
 		ready <- struct{}{}
