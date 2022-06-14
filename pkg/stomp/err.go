@@ -13,6 +13,7 @@ const (
 	errInvalidArg         stompErrorType = "Invalid argument"
 	errFrameScanner       stompErrorType = "Frame scanning error"
 	errBrokerStateMachine stompErrorType = "Protocol (broker) state-machine error"
+	errClientStateMachine stompErrorType = "Protocol (client) state-machine error"
 	errTransaction        stompErrorType = "Transaction error"
 )
 

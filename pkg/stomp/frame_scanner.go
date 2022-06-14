@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func frameSplitter(data []byte, atEOF bool) (advance int, token []byte, errx error) {
+func frameSplitter(data []byte, _ bool) (advance int, token []byte, e error) {
 	if len(data) == 0 {
 		return 0, nil, nil
 	}
