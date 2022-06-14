@@ -9,27 +9,21 @@ import (
 	"syscall"
 )
 
-const (
-	DefaultPort = "61613"
-)
-
 type tcpBroker struct {
-	listener   net.Listener
-	wgSessions *sync.WaitGroup
-	handler    func()
+	listener net.Listener
+	handler  func()
 }
 
 // startTcpBroker is the entry point for starting a TCP server for STOMP broker
-func startTcpBroker(host, port string, loginFunc LoginFunc) (*tcpBroker, error) {
+func startTcpBroker(opts *BrokerOpts) (*tcpBroker, error) {
 	var err error
 	tcp := &tcpBroker{}
 
 	// Listen for incoming connections.
-	tcp.listener, err = net.Listen("tcp", host+":"+port)
+	tcp.listener, err = net.Listen("tcp", opts.Host+":"+opts.Port)
 	if err != nil {
 		return nil, errorMsg(errNetwork, "Listening failed: "+err.Error())
 	}
-	tcp.wgSessions = &sync.WaitGroup{}
 
 	// Handle sigterm and await termChan signal
 	termChan := make(chan os.Signal, 2)
@@ -40,28 +34,33 @@ func startTcpBroker(host, port string, loginFunc LoginFunc) (*tcpBroker, error) 
 	}()
 
 	tcp.handler = func() {
+		wgSessions := &sync.WaitGroup{}
 		for {
 			// Listen for an incoming connection.
 			conn, err := tcp.listener.Accept()
 			if err != nil {
 				log.Println(err)
-				return
+				break
 			}
 			// Handle connections in a new goroutine.
-			go NewSession(conn, loginFunc, tcp.wgSessions).Start()
+			wgSessions.Add(1)
+			go NewSession(conn, opts.LoginFunc, wgSessions, opts.HeartbeatSendIntervalMsec,
+				opts.HeartbeatReceiveIntervalMsec).Start()
 		}
+		wgSessions.Wait()
 	}
 
 	return tcp, nil
 }
 
+// ListenAndServe accepts the TCP client connections and servers the STOMP requests
 func (tcp *tcpBroker) ListenAndServe() {
 	tcp.handler()
 }
 
+// Shutdown brings down the TCP server gracefully
 func (tcp *tcpBroker) Shutdown() {
 	log.Println("Shutdown initiated ...")
-	tcp.wgSessions.Wait()
 	_ = tcp.listener.Close()
 }
 

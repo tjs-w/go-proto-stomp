@@ -1,7 +1,6 @@
 package stomp
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -11,34 +10,32 @@ import (
 	"sync"
 
 	"github.com/cenkalti/backoff"
+	"github.com/go-co-op/gocron"
 	"github.com/google/uuid"
 )
 
-//go:generate sh -c "git describe --tags --abbrev=0 | tee version.txt"
-var (
-	//go:embed version*.txt
-	releaseVersion string
-)
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 // Session handles the STOMP client session on connection
 type Session struct {
-	conn       net.Conn
-	sessionID  string
-	loginFunc  LoginFunc
-	wgSessions *sync.WaitGroup
+	conn               net.Conn
+	sessionID          string
+	loginFunc          LoginFunc
+	wgSessions         *sync.WaitGroup
+	hbSendIntervalMsec int
+	hbRecvIntervalMsec int
+	hbJob              *gocron.Job
 }
 
 // NewSession creates a new session object & maintains the session state internally
-func NewSession(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup) *Session {
+func NewSession(conn net.Conn, loginFunc LoginFunc, wg *sync.WaitGroup,
+	heartbeatSendIntervalMsec, heartbeatReceiveIntervalMsec int,
+) *Session {
 	return &Session{
-		conn:       conn,
-		loginFunc:  loginFunc,
-		sessionID:  uuid.NewString(),
-		wgSessions: wg,
+		conn:               conn,
+		loginFunc:          loginFunc,
+		sessionID:          uuid.NewString(),
+		wgSessions:         wg,
+		hbSendIntervalMsec: heartbeatSendIntervalMsec,
+		hbRecvIntervalMsec: heartbeatReceiveIntervalMsec,
 	}
 }
 
@@ -48,7 +45,6 @@ type LoginFunc func(login, passcode string) error
 // Start begins the STOMP session with the Client
 func (sess *Session) Start() {
 	defer sess.cleanup()
-	sess.wgSessions.Add(1)
 	for raw := range frameScanner(sess.conn) {
 		frame, err := NewFrameFromBytes(raw)
 		if err != nil {
@@ -70,6 +66,9 @@ func (sess *Session) Start() {
 func (sess *Session) cleanup() {
 	_ = sess.conn.Close()
 	sess.wgSessions.Done()
+	if sess.hbJob != nil {
+		sched.RemoveByReference(sess.hbJob)
+	}
 }
 
 // sendError is the helper function to send the ERROR frames
@@ -175,6 +174,22 @@ func (sess *Session) sendMessage(dest, subsID string, ackNum uint32, txID string
 	return sess.send(CmdMessage, h, body)
 }
 
+func (sess *Session) sendRaw(body []byte) error {
+	sendIt := func() error {
+		if _, err := sess.conn.Write(body); err != nil {
+			log.Println(err)
+			return err
+		}
+		return nil
+	}
+
+	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (sess *Session) send(cmd Command, headers map[Header]string, body []byte) error {
 	f := NewFrame(cmd, headers, body)
 
@@ -191,6 +206,7 @@ func (sess *Session) send(cmd Command, headers map[Header]string, body []byte) e
 		return nil
 	}
 
+	// Retry sending on error
 	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
 		return err
 	}
@@ -200,21 +216,6 @@ func (sess *Session) send(cmd Command, headers map[Header]string, body []byte) e
 
 // handleConnect responds to the CONNECT message from client
 func (sess *Session) handleConnect(f *Frame) error {
-	// Version
-	ver := ""
-	for _, v := range strings.Split(f.headers[HdrKeyAcceptVersion], ",") {
-		if v == "1.2" {
-			ver = "1.2"
-			break
-		}
-	}
-	if ver == "" {
-		// Send version ERROR
-		err := sess.sendError(errors.New("version mismatch"),
-			"Server supported versions: 1.2. Received:"+f.String())
-		return errorMsg(errBrokerStateMachine, "Invalid client version received: "+f.String()+"::"+err.Error())
-	}
-
 	// Authentication
 	if sess.loginFunc != nil {
 		login, passcode := f.getHeader(HdrKeyLogin), f.getHeader(HdrKeyPassCode)
@@ -224,17 +225,81 @@ func (sess *Session) handleConnect(f *Frame) error {
 		}
 	}
 
-	// ToDo Heartbeats
+	// Version negotiation
+	ver := ""
+	for _, v := range strings.Split(f.headers[HdrKeyAcceptVersion], ",") {
+		if v == "1.2" {
+			ver = "1.2"
+			break
+		}
+	}
+	if ver == "" {
+		// Send version ERROR
+		return errorMsg(errBrokerStateMachine, "Invalid client version received: "+f.getHeader(HdrKeyVersion))
+	}
+
+	// Heartbeat negotiation
+	if hbVal := f.getHeader(HdrKeyHeartBeat); hbVal != "" {
+		if err := sess.negotiateHeartbeats(hbVal); err != nil {
+			return errorMsg(errBrokerStateMachine, "Heartbeat negotiation: "+err.Error())
+		}
+	}
 
 	// Respond with CONNECTED
 	if err := sess.send(CmdConnected, map[Header]string{
 		HdrKeyVersion:   ver,
 		HdrKeySession:   sess.sessionID,
 		HdrKeyServer:    "go-proto-stomp/" + releaseVersion,
-		HdrKeyHeartBeat: "0,0",
+		HdrKeyHeartBeat: fmt.Sprintf("%d,%d", sess.hbSendIntervalMsec, sess.hbRecvIntervalMsec),
 	}, nil); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (sess *Session) negotiateHeartbeats(hbVal string) error {
+	intervals := strings.Split(hbVal, ",")
+	if len(intervals) != 2 {
+		return errorMsg(errBrokerStateMachine, "Invalid heartbeat header: "+hbVal)
+	}
+
+	// Send-HB negotiation
+	clientSendInterval, err := strconv.Atoi(intervals[0])
+	if err != nil {
+		return errorMsg(errBrokerStateMachine,
+			"Invalid heartbeat header send interval from client: "+hbVal)
+	}
+	if clientSendInterval == 0 || sess.hbRecvIntervalMsec == 0 {
+		sess.hbRecvIntervalMsec = 0
+	} else if clientSendInterval > sess.hbRecvIntervalMsec {
+		sess.hbRecvIntervalMsec = clientSendInterval
+	}
+
+	// Receive-HB negotiation
+	clientRecvInterval, err := strconv.Atoi(intervals[1])
+	if err != nil {
+		return errorMsg(errBrokerStateMachine,
+			"Invalid heartbeat header receive interval from client: "+hbVal)
+	}
+	if clientRecvInterval == 0 || sess.hbSendIntervalMsec == 0 {
+		sess.hbSendIntervalMsec = 0
+	} else if clientRecvInterval > sess.hbSendIntervalMsec {
+		sess.hbSendIntervalMsec = clientRecvInterval
+	}
+
+	// Schedule sending heartbeats by hbSendIntervalMsec
+	if sess.hbSendIntervalMsec == 0 { // no heartbeats to be sent
+		return nil
+	}
+	sess.hbJob, err = sched.Every(sess.hbSendIntervalMsec).Milliseconds().Tag(sess.sessionID).Do(
+		func() {
+			_ = sess.sendRaw([]byte("\n"))
+		})
+	if err != nil {
+		return errorMsg(errBrokerStateMachine, "Heartbeat setup error: "+err.Error())
+	}
+	sched.StartAsync()
 
 	return nil
 }
@@ -248,30 +313,68 @@ type Broker interface {
 	Shutdown()
 }
 
+// BrokerOpts is passed as an argument to StartBroker
+type BrokerOpts struct {
+	// Transport refers to the underlying protocol for STOMP.
+	// Choices: TransportTCP, TransportWebsocket. Default: TransportTCP
+	Transport Transport
+
+	// Host is the name of the host or IP to bind the server to. Default: localhost
+	Host string
+
+	// Port is the port number for the server to listen on. Default: 61613 (DefaultPort)
+	Port string
+
+	// LoginFunc is a user defined function for authenticating the user. Default: nil
+	// It is of the form `func(login, passcode string) error`
+	LoginFunc LoginFunc
+
+	// HeartbeatSendIntervalMsec is the interval in milliseconds by which the broker can send heartbeats.
+	// The broker will negotiate using this value with the client. Default: 0 (no heartbeats)
+	// It will not send the heartbeats by an interval any smaller than this value.
+	HeartbeatSendIntervalMsec int
+
+	// HeartbeatReceiveIntervalMsec is the interval in milliseconds by which the broker can receive heartbeats.
+	// The broker will negotiate using this value with the client. Default: 0 (no heartbeats)
+	// This is to tell the client that the broker cannot receive heartbeats by any shorter interval than this value.
+	HeartbeatReceiveIntervalMsec int
+}
+
 // StartBroker is the entry point for the STOMP broker.
-// It accepts `transport` which could be either TCP or Websocket; the host and the port the server must start on; and
-// a loginFunc [func(login, passcode string) error] which is a user defined function for authenticating the user.
-func StartBroker(transport Transport, host, port string, loginFunc LoginFunc) (Broker, error) {
+func StartBroker(opts *BrokerOpts) (Broker, error) {
 	var broker Broker
 	var err error
-	switch transport {
+
+	// Set default values
+	if opts.Host == "" {
+		opts.Host = "localhost"
+	}
+	if opts.Port == "" {
+		opts.Port = DefaultPort
+	}
+	if opts.Transport == "" {
+		opts.Transport = TransportTCP
+	}
+	if opts.HeartbeatSendIntervalMsec < 0 {
+		opts.HeartbeatSendIntervalMsec = 0
+	}
+	if opts.HeartbeatReceiveIntervalMsec < 0 {
+		opts.HeartbeatReceiveIntervalMsec = 0
+	}
+
+	switch opts.Transport {
 	case TransportTCP:
 		var tcp *tcpBroker
-		if tcp, err = startTcpBroker(host, port, loginFunc); err != nil {
+		if tcp, err = startTcpBroker(opts); err != nil {
 			return nil, err
 		}
 		broker = tcp
 	case TransportWebsocket:
 		var wss *wssBroker
-		if wss, err = startWebsocketBroker(host, port, loginFunc); err != nil {
+		if wss, err = startWebsocketBroker(opts); err != nil {
 			return nil, err
 		}
 		broker = wss
 	}
 	return broker, nil
-}
-
-// ReleaseVersion returns the version of the go-proto-stomp module
-func ReleaseVersion() string {
-	return releaseVersion
 }
