@@ -259,17 +259,12 @@ func (sess *Session) handleConnect(f *Frame) error {
 }
 
 func (sess *Session) negotiateHeartbeats(hbVal string) error {
-	intervals := strings.Split(hbVal, ",")
-	if len(intervals) != 2 {
-		return errorMsg(errBrokerStateMachine, "Invalid heartbeat header: "+hbVal)
+	clientSendInterval, clientRecvInterval, err := parseHbVal(hbVal)
+	if err != nil {
+		return err
 	}
 
 	// Send-HB negotiation
-	clientSendInterval, err := strconv.Atoi(intervals[0])
-	if err != nil {
-		return errorMsg(errBrokerStateMachine,
-			"Invalid heartbeat header send interval from client: "+hbVal)
-	}
 	if clientSendInterval == 0 || sess.hbRecvIntervalMsec == 0 {
 		sess.hbRecvIntervalMsec = 0
 	} else if clientSendInterval > sess.hbRecvIntervalMsec {
@@ -277,21 +272,14 @@ func (sess *Session) negotiateHeartbeats(hbVal string) error {
 	}
 
 	// Receive-HB negotiation
-	clientRecvInterval, err := strconv.Atoi(intervals[1])
-	if err != nil {
-		return errorMsg(errBrokerStateMachine,
-			"Invalid heartbeat header receive interval from client: "+hbVal)
-	}
 	if clientRecvInterval == 0 || sess.hbSendIntervalMsec == 0 {
 		sess.hbSendIntervalMsec = 0
+		return nil // no heartbeats to be sent
 	} else if clientRecvInterval > sess.hbSendIntervalMsec {
 		sess.hbSendIntervalMsec = clientRecvInterval
 	}
 
 	// Schedule sending heartbeats by hbSendIntervalMsec
-	if sess.hbSendIntervalMsec == 0 { // no heartbeats to be sent
-		return nil
-	}
 	sess.hbJob, err = sched.Every(sess.hbSendIntervalMsec).Milliseconds().Tag(sess.sessionID).Do(
 		func() {
 			_ = sess.sendRaw([]byte("\n"))

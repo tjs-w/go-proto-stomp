@@ -3,9 +3,9 @@
 [![go workflow](https://github.com/tjs-w/go-proto-stomp/actions/workflows/go.yml/badge.svg)](https://github.com/tjs-w/go-proto-stomp/actions/workflows/go.yml)
 [![codeQL workflow](https://github.com/tjs-w/go-proto-stomp/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/tjs-w/go-proto-stomp/actions/workflows/codeql-analysis.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tjs-w/go-proto-stomp)](https://goreportcard.com/report/github.com/tjs-w/go-proto-stomp)
+[![Maintainability](https://api.codeclimate.com/v1/badges/58623b1a2249bc679d9b/maintainability)](https://codeclimate.com/github/tjs-w/go-proto-stomp/maintainability)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/58623b1a2249bc679d9b/test_coverage)](https://codeclimate.com/github/tjs-w/go-proto-stomp/test_coverage)
 [![codecov](https://codecov.io/gh/tjs-w/go-proto-stomp/branch/main/graph/badge.svg?token=655YSPLWCF)](https://codecov.io/gh/tjs-w/go-proto-stomp)
-[![release workflow](https://github.com/tjs-w/go-proto-stomp/actions/workflows/release.yml/badge.svg)](https://github.com/tjs-w/go-proto-stomp/actions/workflows/release.yml)
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/tjs-w/go-proto-stomp)
 ![GitHub](https://img.shields.io/github/license/tjs-w/go-proto-stomp)
 
 [<img width=40% src=https://stomp.github.io/images/project-logo.png>](https://stomp.github.io/index.html)

@@ -46,3 +46,12 @@ jobs:
 
     - name: Codecov
       uses: codecov/codecov-action@v3.1.0
+
+    - name: CodeClimate
+      uses: paambaati/codeclimate-action@v3.0.0
+      with:
+        debug: true
+        prefix: github.com/tjs-w/go-proto-stomp
+        coverageLocations: ./coverage.out:gocov
+      env:
+        CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
