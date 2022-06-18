@@ -35,6 +35,12 @@ var (
 )
 
 func addSubscription(dest string, subsID string, ackMode AckMode, sess *Session) error {
+	if subsID == "" {
+		return errorMsg(errBrokerStateMachine, "Missing ID when adding subscription")
+	}
+	if dest == "" {
+		return errorMsg(errBrokerStateMachine, "Missing destination when adding subscription, subsID: "+subsID)
+	}
 	if _, ok := destToSubsMap[dest][subsID]; !ok {
 		destToSubsMap[dest] = subsToInfo{}
 	}
@@ -54,6 +60,9 @@ func addSubscription(dest string, subsID string, ackMode AckMode, sess *Session)
 }
 
 func removeSubscription(subsID string) error {
+	if subsID == "" {
+		return errorMsg(errBrokerStateMachine, "Missing subscription ID when removing subscription")
+	}
 	if _, ok := subsToDestMap[subsID]; !ok {
 		return errorMsg(errBrokerStateMachine, "No such subscription present to unsubscribe, subsID: "+subsID)
 	}
@@ -84,8 +93,8 @@ func cleanupSubscriptions(sessionID string) error {
 }
 
 func publish(frame *Frame, txID string) error {
-	dest := frame.headers[HdrKeyDestination]
-	if _, ok := destToSubsMap[dest]; !ok {
+	dest := frame.getHeader(HdrKeyDestination)
+	if dest == "" {
 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
 	}
 

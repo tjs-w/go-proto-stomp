@@ -103,15 +103,15 @@ func (sess *Session) stateMachine(frame *Frame) error {
 
 	case CmdSubscribe:
 		ack := HdrValAckAuto
-		if _, ok := frame.headers[HdrKeyAck]; ok {
-			ack = AckMode(frame.headers[HdrKeyAck])
+		if ackStr := frame.getHeader(HdrKeyAck); ackStr == "" {
+			ack = AckMode(ackStr)
 		}
-		if err := addSubscription(frame.headers[HdrKeyDestination], frame.headers[HdrKeyID], ack, sess); err != nil {
+		if err := addSubscription(frame.getHeader(HdrKeyDestination), frame.getHeader(HdrKeyID), ack, sess); err != nil {
 			return err
 		}
 
 	case CmdUnsubscribe:
-		if err := removeSubscription(frame.headers[HdrKeyID]); err != nil {
+		if err := removeSubscription(frame.getHeader(HdrKeyID)); err != nil {
 			return err
 		}
 
@@ -126,12 +126,12 @@ func (sess *Session) stateMachine(frame *Frame) error {
 		// }
 
 	case CmdBegin:
-		if err := startTx(frame.headers[HdrKeyTransaction]); err != nil {
+		if err := startTx(frame.getHeader(HdrKeyTransaction)); err != nil {
 			return err
 		}
 
 	case CmdCommit:
-		txID := frame.headers[HdrKeyTransaction]
+		txID := frame.getHeader(HdrKeyTransaction)
 		// Pick each message from TX buffer
 		if err := foreachTx(txID, func(frameTx *Frame) error {
 			// Send the message to each subscriber
@@ -144,13 +144,14 @@ func (sess *Session) stateMachine(frame *Frame) error {
 		}
 
 	case CmdAbort:
-		if err := dropTx(frame.headers[HdrKeyTransaction]); err != nil {
+		txID := frame.getHeader(HdrKeyTransaction)
+		if err := dropTx(txID); err != nil {
 			return err
 		}
 
 	case CmdDisconnect:
 		_ = cleanupSubscriptions(sess.sessionID)
-		_ = sess.send(CmdReceipt, map[Header]string{HdrKeyReceiptID: frame.headers[HdrKeyReceipt]}, nil)
+		_ = sess.send(CmdReceipt, map[Header]string{HdrKeyReceiptID: frame.getHeader(HdrKeyReceipt)}, nil)
 		_ = sess.conn.Close()
 	}
 	return nil
@@ -227,7 +228,7 @@ func (sess *Session) handleConnect(f *Frame) error {
 
 	// Version negotiation
 	ver := ""
-	for _, v := range strings.Split(f.headers[HdrKeyAcceptVersion], ",") {
+	for _, v := range strings.Split(f.getHeader(HdrKeyAcceptVersion), ",") {
 		if v == "1.2" {
 			ver = "1.2"
 			break

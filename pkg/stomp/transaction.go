@@ -6,7 +6,11 @@ import "fmt"
 // It is the mapping from the transaction ID to list of messages
 var txBuffer = map[string][]*Frame{}
 
+// startTx begins the transaction by creating the buffer queue for the txID
 func startTx(txID string) error {
+	if txID == "" {
+		return errorMsg(errTransaction, "Missing transaction ID")
+	}
 	if _, ok := txBuffer[txID]; ok {
 		return errorMsg(errTransaction, "Transaction already began/present (possible duplicate), TxID: "+txID)
 	}
@@ -14,6 +18,7 @@ func startTx(txID string) error {
 	return nil
 }
 
+// bufferTxMessage adds the message to the transaction queue
 func bufferTxMessage(txID string, msgFrame *Frame) error {
 	if _, ok := txBuffer[txID]; !ok {
 		return errorMsg(errTransaction, "No such transaction present, TxID: "+txID)
@@ -24,6 +29,9 @@ func bufferTxMessage(txID string, msgFrame *Frame) error {
 
 // foreachTx executes the closure on each message in the list for given transaction
 func foreachTx(txID string, fn func(*Frame) error) error {
+	if txID == "" {
+		return errorMsg(errTransaction, "Missing transaction ID when committing")
+	}
 	if _, ok := txBuffer[txID]; !ok {
 		return errorMsg(errTransaction, fmt.Sprintf("Transaction ID '%s' not found in txBuffer", txID))
 	}
@@ -37,6 +45,9 @@ func foreachTx(txID string, fn func(*Frame) error) error {
 
 // dropTx removes the transaction messages from the txBuffer
 func dropTx(txID string) error {
+	if txID == "" {
+		return errorMsg(errTransaction, "Missing transaction ID when cancelling")
+	}
 	if _, ok := txBuffer[txID]; !ok {
 		return errorMsg(errTransaction, fmt.Sprintf("Transaction ID '%s' not found for deletion from txBuffer", txID))
 	}

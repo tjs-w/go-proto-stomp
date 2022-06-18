@@ -136,7 +136,10 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 func (c *ClientHandler) stateMachine(frame *Frame) error {
 	switch frame.command {
 	case CmdConnected:
-		c.SessionID = frame.headers[HdrKeySession]
+		c.SessionID = frame.getHeader(HdrKeySession)
+		if c.SessionID == "" {
+			return errorMsg(errClientStateMachine, "Missing session ID in connection")
+		}
 		if hbVal := frame.getHeader(HdrKeyHeartBeat); hbVal != "" {
 			if err := c.negotiateHeartbeats(hbVal); err != nil {
 				return err
@@ -147,7 +150,7 @@ func (c *ClientHandler) stateMachine(frame *Frame) error {
 			c.msgHandler(c.getUserMessage(frame))
 		}
 	case CmdReceipt:
-		if frame.headers[HdrKeyReceiptID] == disconnectID {
+		if frame.getHeader(HdrKeyReceiptID) == disconnectID {
 			_ = c.conn.Close()
 			return errors.New("bye") // Returning error will close the connection
 		}
