@@ -29,6 +29,7 @@ type Subscription struct {
 	c           *ClientHandler
 	SubsID      string
 	Destination string
+	ackMode     AckMode
 }
 
 // Transaction represents the state of transaction
@@ -42,15 +43,24 @@ type MessageHandlerFunc func(message *UserMessage)
 
 // ClientHandler is the control struct for Client's connection with the STOMP Broker
 type ClientHandler struct {
-	SessionID      string             // Session ID for the connection with the STOMP Broker
-	conn           net.Conn           // Connection to the server/broker
-	host           string             // Virtual-host on the STOMP broker
-	login          string             // Username for the login to STOMP broker
-	passcode       string             // Password to log in to the STOMP broker
-	hbSendInterval int                // Send-interval in milliseconds from client
-	hbRecvInterval int                // Receive-interval in milliseconds on client
-	hbJob          *gocron.Job        // Heartbeat sending job
-	msgHandler     MessageHandlerFunc // Callback to process the MESSAGE
+	SessionID      string                   // Session ID for the connection with the STOMP Broker
+	conn           net.Conn                 // Connection to the server/broker
+	host           string                   // Virtual-host on the STOMP broker
+	login          string                   // Username for the login to STOMP broker
+	passcode       string                   // Password to log in to the STOMP broker
+	hbSendInterval int                      // Send-interval in milliseconds from client
+	hbRecvInterval int                      // Receive-interval in milliseconds on client
+	hbJob          *gocron.Job              // Heartbeat sending job
+	msgHandler     MessageHandlerFunc       // Callback to process the MESSAGE
+	subsMap        map[string]*Subscription // Subscription ID to Subscription map
+	ackCh          chan *ackData            // Channel to signal ackHandler
+}
+
+type ackData struct {
+	subsID  string
+	ackID   string
+	txID    string
+	ackMode AckMode
 }
 
 // ClientOpts provides the options as argument to NewClientHandler
@@ -73,6 +83,8 @@ func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) 
 		conn, err = startTcpClient(host, port)
 	case TransportWebsocket:
 		conn, err = startWebsocketClient(host, port)
+	default:
+		log.Fatal("Invalid transport:", transport, ". Expected:", TransportTCP, "or", TransportWebsocket)
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -85,6 +97,7 @@ func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) 
 	if opts.VirtualHost == "" {
 		opts.VirtualHost = conn.RemoteAddr().String()
 	}
+
 	return &ClientHandler{
 		conn:           conn,
 		host:           opts.VirtualHost,
@@ -93,6 +106,8 @@ func NewClientHandler(transport Transport, host, port string, opts *ClientOpts) 
 		hbSendInterval: opts.HeartbeatSendInterval,
 		hbRecvInterval: opts.HeartbeatReceiveInterval,
 		msgHandler:     opts.MessageHandler,
+		ackCh:          make(chan *ackData, 100),
+		subsMap:        map[string]*Subscription{},
 	}
 }
 
@@ -107,6 +122,7 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 		return err
 	}
 
+	// go c.ackHandler()
 	go func() {
 		for raw := range frameScanner(c.conn) {
 			frame, err := NewFrameFromBytes(raw)
@@ -136,28 +152,71 @@ func (c *ClientHandler) Connect(useStompCmd bool) error {
 func (c *ClientHandler) stateMachine(frame *Frame) error {
 	switch frame.command {
 	case CmdConnected:
-		c.SessionID = frame.getHeader(HdrKeySession)
-		if c.SessionID == "" {
-			return errorMsg(errClientStateMachine, "Missing session ID in connection")
+		if err := c.handleConnected(frame); err != nil {
+			return err
 		}
-		if hbVal := frame.getHeader(HdrKeyHeartBeat); hbVal != "" {
-			if err := c.negotiateHeartbeats(hbVal); err != nil {
-				return err
-			}
-		}
+
 	case CmdMessage:
-		if c.msgHandler != nil {
-			c.msgHandler(c.getUserMessage(frame))
+		if err := c.handleMessage(frame); err != nil {
+			return err
 		}
+
 	case CmdReceipt:
 		if frame.getHeader(HdrKeyReceiptID) == disconnectID {
 			_ = c.conn.Close()
 			return errors.New("bye") // Returning error will close the connection
 		}
+
 	case CmdError:
+		log.Println("Received error:", frame)
 		if err := c.Disconnect(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (c *ClientHandler) handleConnected(frame *Frame) error {
+	c.SessionID = frame.getHeader(HdrKeySession)
+	if c.SessionID == "" {
+		return errorMsg(errClientStateMachine, "Missing session ID in connection")
+	}
+	if hbVal := frame.getHeader(HdrKeyHeartBeat); hbVal != "" {
+		if err := c.negotiateHeartbeats(hbVal); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *ClientHandler) handleMessage(frame *Frame) error {
+	if c.msgHandler != nil {
+		c.msgHandler(c.getUserMessage(frame))
+	}
+	if frame.getHeader(HdrKeyAck) == "" {
+		return nil
+	}
+	subsID := frame.getHeader(HdrKeySubscription)
+	if _, ok := c.subsMap[subsID]; !ok {
+		log.Println("Subscription ID in message:", subsID, "not found in c.subsMap")
+		return nil
+	}
+	subs := c.subsMap[subsID]
+
+	// Client Individual Ack
+	if subs.ackMode == HdrValAckClientIndividual {
+		if err := c.sendAck(frame.getHeader(HdrKeyAck), frame.getHeader(HdrKeyTransaction)); err != nil {
+			log.Println(err)
+		}
+		return nil
+	}
+
+	// Client Ack
+	c.ackCh <- &ackData{
+		subsID:  subs.SubsID,
+		ackID:   frame.getHeader(HdrKeyAck),
+		txID:    frame.getHeader(HdrKeyTransaction),
+		ackMode: subs.ackMode,
 	}
 	return nil
 }
@@ -174,8 +233,8 @@ func (c *ClientHandler) send(cmd Command, headers map[Header]string, body []byte
 		}
 		return nil
 	}
-
-	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3)
+	if err := backoff.Retry(sendIt, b); err != nil {
 		return err
 	}
 
@@ -190,7 +249,8 @@ func (c *ClientHandler) sendRaw(body []byte) error {
 		return nil
 	}
 
-	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3)
+	if err := backoff.Retry(sendIt, b); err != nil {
 		return err
 	}
 
@@ -283,19 +343,26 @@ func (c *ClientHandler) Subscribe(dest string, mode AckMode) (*Subscription, err
 	if mode == "" {
 		mode = HdrValAckAuto
 	}
+
 	h := map[Header]string{
 		HdrKeyID:          subID,
 		HdrKeyDestination: dest,
 		HdrKeyAck:         string(mode),
 	}
+
 	if err := c.send(CmdSubscribe, h, nil); err != nil {
 		return nil, err
 	}
-	return &Subscription{c: c, SubsID: subID, Destination: dest}, nil
+
+	c.subsMap[subID] = &Subscription{c: c, SubsID: subID, Destination: dest, ackMode: mode}
+	return c.subsMap[subID], nil
 }
 
 func (s *Subscription) Unsubscribe() error {
-	return s.c.send(CmdUnsubscribe, map[Header]string{HdrKeyID: s.SubsID}, nil)
+	if err := s.c.send(CmdUnsubscribe, map[Header]string{HdrKeyID: s.SubsID}, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *ClientHandler) BeginTransaction() (*Transaction, error) {
@@ -340,18 +407,36 @@ func (t *Transaction) CommitTransaction() error {
 	return nil
 }
 
-// func (c *ClientHandler) ack(id string, txID string) error {
-// 	m := map[Header]string{HdrKeyID: id}
-// 	if txID != "" {
-// 		m[HdrKeyTransaction] = txID
-// 	}
-// 	return c.send(CmdAck, m, nil)
-// }
-//
+func (c *ClientHandler) sendAck(id string, txID string) error {
+	m := map[Header]string{HdrKeyID: id}
+	if txID != "" {
+		m[HdrKeyTransaction] = txID
+	}
+	return c.send(CmdAck, m, nil)
+}
+
 // func (c *ClientHandler) nack(id string, txID string) error {
 // 	m := map[Header]string{HdrKeyID: id}
 // 	if txID != "" {
 // 		m[HdrKeyTransaction] = txID
 // 	}
 // 	return c.send(CmdNack, m, nil)
+// }
+
+// func (c *ClientHandler) ackHandler() {
+// 	t := time.Tick(time.Second * 3)
+// 	m := map[string]*ackData{}
+// 	for {
+// 		select {
+// 		case d := <-c.ackCh:
+// 			m[d.subsID] = d
+// 		case <-t:
+// 			for _, d := range m {
+// 				if err := c.sendAck(d.ackID, d.txID); err != nil {
+// 					log.Println(err)
+// 				}
+// 			}
+// 			m = map[string]*ackData{}
+// 		}
+// 	}
 // }

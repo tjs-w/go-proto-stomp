@@ -89,7 +89,7 @@ func TestStartBroker(t *testing.T) {
 			}
 
 			var subs *Subscription
-			if subs, err = c.Subscribe(dest, ""); err != nil {
+			if subs, err = c.Subscribe(dest, HdrValAckAuto); err != nil {
 				t.Error(err)
 			}
 

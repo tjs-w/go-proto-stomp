@@ -116,9 +116,9 @@ func (sess *Session) stateMachine(frame *Frame) error {
 		}
 
 	case CmdAck:
-		// if err := processAck(frame.headers[HdrKeyID]); err != nil {
-		// 	return err
-		// }
+		if err := processAck(frame.headers[HdrKeyID]); err != nil {
+			return err
+		}
 
 	case CmdNack:
 		// if err := processNack(frame.headers[HdrKeyID]); err != nil {
@@ -184,7 +184,8 @@ func (sess *Session) sendRaw(body []byte) error {
 		return nil
 	}
 
-	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3)
+	if err := backoff.Retry(sendIt, b); err != nil {
 		return err
 	}
 
@@ -208,7 +209,8 @@ func (sess *Session) send(cmd Command, headers map[Header]string, body []byte) e
 	}
 
 	// Retry sending on error
-	if err := backoff.Retry(sendIt, backoff.NewExponentialBackOff()); err != nil {
+	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3)
+	if err := backoff.Retry(sendIt, b); err != nil {
 		return err
 	}
 

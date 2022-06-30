@@ -75,6 +75,9 @@ func removeSubscription(subsID string) error {
 
 	sessToSubsMap[sess].Remove(subsID)
 	delete(destToSubsMap[dest], subsID)
+	if len(destToSubsMap[dest]) == 0 {
+		delete(destToSubsMap, dest)
+	}
 	delete(subsToDestMap, subsID)
 	return nil
 }
@@ -116,13 +119,7 @@ func publish(frame *Frame, txID string) error {
 	var wg sync.WaitGroup
 	for subsID, info := range destToSubsMap[dest] {
 		wg.Add(1)
-		if txID == "" {
-			// Parallelize sending non-tx messages
-			go sendIt(subsID, info, &wg)
-		} else {
-			// Send tx messages in same sequence (do not parallelize to maintain order)
-			sendIt(subsID, info, &wg)
-		}
+		go sendIt(subsID, info, &wg)
 	}
 	wg.Wait()
 
@@ -147,33 +144,33 @@ func scanAckNum(fmtAck string) (dest string, subsID string, ackNum uint32, err e
 	return parts[0], parts[1], uint32(n), nil
 }
 
-// func processAck(ackVal string) error {
-// 	dest, subsID, ackNum, err := scanAckNum(ackVal)
-// 	if err != nil {
-// 		return errorMsg(errBrokerStateMachine, "Invalid ACK value: "+ackVal)
-// 	}
-//
-// 	if _, ok := destToSubsMap[dest]; !ok {
-// 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
-// 	}
-//
-// 	if _, ok := destToSubsMap[dest][subsID]; !ok {
-// 		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest+"/"+subsID)
-// 	}
-//
-// 	info := destToSubsMap[dest][subsID]
-// 	info.Lock()
-// 	defer info.Unlock()
-// 	if info.ackMode == HdrValAckClient {
-// 		for i := info.pendingAckBitmap.Minimum(); info.pendingAckBitmap.Contains(i); i++ {
-// 			info.pendingAckBitmap.Remove(i)
-// 		}
-// 	} else if info.ackMode == HdrValAckClientIndividual {
-// 		info.pendingAckBitmap.Remove(ackNum)
-// 	}
-// 	return nil
-// }
-//
+func processAck(ackVal string) error {
+	dest, subsID, ackNum, err := scanAckNum(ackVal)
+	if err != nil {
+		return errorMsg(errBrokerStateMachine, "Invalid ACK value: "+ackVal)
+	}
+
+	if _, ok := destToSubsMap[dest]; !ok {
+		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest)
+	}
+
+	if _, ok := destToSubsMap[dest][subsID]; !ok {
+		return errorMsg(errBrokerStateMachine, "Missing entry in destToSubsMap, for key: "+dest+"/"+subsID)
+	}
+
+	info := destToSubsMap[dest][subsID]
+	info.Lock()
+	defer info.Unlock()
+	if info.ackMode == HdrValAckClient {
+		for i := info.pendingAckBitmap.Minimum(); info.pendingAckBitmap.Contains(i); i++ {
+			info.pendingAckBitmap.Remove(i)
+		}
+	} else if info.ackMode == HdrValAckClientIndividual {
+		info.pendingAckBitmap.Remove(ackNum)
+	}
+	return nil
+}
+
 // func processNack(ackVal string) error {
 // 	// Do nothing
 // 	return nil

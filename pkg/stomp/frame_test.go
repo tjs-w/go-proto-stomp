@@ -234,7 +234,7 @@ func TestFrame_Deserialize(t *testing.T) {
 				return
 			}
 			if !cmp.Equal(f, expected.frame, cmp.AllowUnexported(Frame{})) {
-				t.Error(cmp.Diff(f, expected.frame), cmp.AllowUnexported(Frame{}))
+				t.Error(cmp.Diff(f, expected.frame, cmp.AllowUnexported(Frame{})))
 			}
 		})
 	}
