@@ -1,6 +1,6 @@
 module github.com/tjs-w/go-proto-stomp
 
-go 1.18
+go 1.24
 
 require (
 	github.com/RoaringBitmap/roaring v1.0.0
@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
-	github.com/klauspost/compress v1.10.3 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/mattn/go-colorable v0.1.9 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
